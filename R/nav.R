@@ -547,9 +547,11 @@ outlierEmlTbl <- function(df,deployment) {
             deltaNAVPct=percentify(deltaNAVPct),
             positCorrection=beautify(positCorrection)
           ) %>%
-          dplyr::select(portfolioName,date,NAV,delta,deltaNAVPct,positCorrection)
+          dplyr::select(portfolioName,date,NAV,delta,deltaNAVPct##,positCorrection
+          )
 
-        colnames(df) <- c("Portfolio","Date","NAV","NAV Delta","NAV Delta (%)","NAV Correction")
+        colnames(df) <- c("Portfolio","Date","NAV","NAV Delta","NAV Delta (%)"##,"NAV Correction"
+        )
 
         return(df)
 }
@@ -587,8 +589,7 @@ outlierData <- function(session,
     
     NROW(summary) > 0 || return(NULL)
 
-    summary <- outlierEmlTbl(summary,deployment) ## %>%
-      ##dplyr::select(-`NAV Correction`)
+    summary <- outlierEmlTbl(summary,deployment)
 
     return(list("summary"=summary,"detail"=details))
 
