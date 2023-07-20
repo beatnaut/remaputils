@@ -1271,7 +1271,7 @@ alertEmail <- function(session,
                         "CALLTOACTIONPLACEHOLDER"="Go to System",
                         "DEPLOYMENT"=deployment,
                         "URLPLACEHOLDER"=paste0("https://",deployment,".decafhub.com"),
-                        "FINALPARAGRAPHPLACEHOLDER"="",
+                        "FINALPARAGRAPHPLACEHOLDER"="Please contact us if you experience any issues or have questions/feedback",
                         "ADDRESSPLACEHOLDER"="",
                         "GOODBYEPLACEHOLDER"="Best Regards,<br>DECAF TEAM",
                         "ADDENDUMPLACEHOLDER"=addendum
@@ -1403,7 +1403,7 @@ alertMissingResourceFieldV2 <- function (session,
     ## Run the email using function above
     alertEmail(session,
                data=list("summary"=result),                    
-               emailParams=emailParams,,               
+               emailParams=emailParams,              
                wdw=c(gte,lte),                     
                tz=tz
               )       
@@ -1412,6 +1412,53 @@ alertMissingResourceFieldV2 <- function (session,
     return("Email Sent!")
 
 }
+
+##' A function to produce any email alert, given a respective function.
+##'
+##' This is the description
+##'
+##' @param session The rdecaf session.
+##' @param emailParams List of the parameters for the email dispatch. Should include greeting, subject, etc.
+##' @param window String vector of the time window in which the alert to be sent, e.g. c(tz,gtw,lte). Defaults to 24H.
+##' @param send date value of the date representing the as of date. Defaults to present.
+##' @param date date value of the date in which to send. Defaults to NULL for all.
+##' @param dataFunc string of the function name to run to return the data. Should be a function that generates a list with two or less elements (summary and details).
+##' @param dataParams list of the parameters to supply the function. 
+##' @param ... Any additional arguments.
+##' @return Sends email with the alert and returns a message.
+##' @export
+alertDecafData <- function(session,
+                           emailParams,
+                           window=c("00:00:00","23:59:59","UTC"),
+                           send=Sys.Date(),
+                           date=NULL,
+                           dataFunc,
+                           dataParams,
+                           ...) {
+
+
+    ## Is it alert time:
+    itsAlertTime <- itsTime(tz=window[3], gte=window[1], lte=window[2])
+    itsAlertDate <- weekdays(send) %in% date | is.null(date)
+
+    ## If not, return NULL:
+    itsAlertTime & itsAlertDate || return(NULL)
+
+    data <- do.call(dataFunc,dataParams)
+
+    ## Run the email using function above
+    alertEmail(session,
+               data=data,                    
+               emailParams=emailParams,               
+               wdw=window[1:2],                     
+               tz=window[3]
+              )       
+
+    ## Return with message:
+    return("Email Sent!")
+
+}
+
 
 
 data(update_email_template, envir=environment())
