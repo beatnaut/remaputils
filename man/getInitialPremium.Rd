@@ -5,6 +5,8 @@
 \title{A function to get initial premium date and value for a trades data frame.}
 \usage{
 getInitialPremium(data, minval = 1000)
+
+getInitialPremium(data, minval = 1000)
 }
 \arguments{
 \item{data}{a trades data frame}
@@ -13,7 +15,11 @@ getInitialPremium(data, minval = 1000)
 }
 \value{
 A list
+
+A list
 }
 \description{
+This is the description
+
 This is the description
 }

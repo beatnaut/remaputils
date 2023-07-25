@@ -2388,9 +2388,13 @@ xDecafPreemble <- function(sourceSession, targetSession, containerMap, container
     ## Add the container type information:
     portAccMap[, "containerType"] <- rep(containerType, NROW(portAccMap))
 
-    taccountname <- lapply(containerMap, function(x) x[["taccountname"]])
-    taccountname <- sapply(taccountname, function(x) ifelse(is.null(x), NA, x))
-    portAccMap[, "taccountname"] <- taccountname
+    if (containerType == "portfolios") {
+        portAccMap[, "taccountname"] <- NA
+    } else {
+        taccountname <- lapply(containerMap, function(x) x[["taccountname"]])
+        taccountname <- sapply(taccountname, function(x) ifelse(is.null(x), NA, x))
+        portAccMap[, "taccountname"] <- taccountname
+    }
 
     ## Print message:
     print(paste0("Retrieving stocks and corresponding resources from source for ", containerType, " ..."))
@@ -2398,6 +2402,12 @@ xDecafPreemble <- function(sourceSession, targetSession, containerMap, container
     ## Get stocks:
     sourceStocks <- getStocks(sourceContainer, sourceSession, zero = 1, date = Sys.Date(), c = substr(containerType, 1, nchar(containerType) -1))
 
+    if(NROW(sourceStocks) == 0) {
+        return(list("trades"=NULL,
+                    "resources"=NULL,
+                    "portAccMap"=portAccMap))
+    }
+    
     ## Get the vision resources by stock:
     sourceResources <- getResourcesByStock(sourceStocks, sourceSession)
 
