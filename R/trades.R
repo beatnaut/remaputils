@@ -66,6 +66,41 @@ inferReversals <- function(trades) {
     return(trades)
 }
 
+##' ## A function to infer reversal trades
+##'
+##' This is the description
+##'
+##' @param trades The trades data frame with pxmain, accmain, commitment, qytmain, and resmain columns:
+##' @return The same data frame with reversal column added
+##' @export
+inferReversalsV2 <- function(trades) {
+
+    trades <- trades %>%
+      dplyr::mutate(
+        reversal=FALSE,
+        pxmain_F=str_sub(as.character(numerize(pxmain) * 100000000), 1, 8),
+        accmain_F=trimws(as.character(accmain)),
+        resmain_F=trimws(str_sub(resmain,str_locate(resmain,"=")[1]+1)),
+        qtymain_F=if_else(!is.na(qtymain),str_sub(as.character(abs(numerize(qtymain)) * 100000000), 1, 8),as.character(NA)),
+        commitment_F=trimws(str_replace_all(as.character(commitment),"-",""))
+      ) %>%
+      dplyr::mutate(tradeCompKey=paste0(accmain_F, resmain_F, commitment_F, qtymain_F, pxmain_F)) %>%
+      dplyr::group_by(tradeCompKey) %>%
+      dplyr::mutate(nrows=n(),sumq=sum(numerize(qtymain),na.rm=TRUE))
+
+    trades[trades$nrows>1 & trades$nrows %% 2 == 0 & trades$sumq==0,]$reversal <- TRUE
+    ## If no more than 1 composite key, i.e trade
+    ## If number of trades with key is not even
+    ## If the sum of the qtymains of comp key is not 0
+
+    trades <- trades %>%
+      dplyr::select(-c(nrows,sumq),-ends_with("_F",ignore.case=FALSE)) %>%
+      dplyr::ungroup()
+
+    ## Done, return:
+    return(trades)
+}
+
 
 ##' A function to get the value amounts of transfers for a portfolio.
 ##'
@@ -717,5 +752,44 @@ detectTransfers <- function(portfolio,
     select(!contains(c("isInitialPremiumSuspect", "isTransfer", "isSuspect","misclassified")), isInitialPremiumSuspect, isTransfer, isSuspect,misclassified)
 
   return(cashFlowMapd)
+
+}
+
+##' A function to get initial premium date and value for a trades data frame.
+##'
+##' This is the description
+##'
+##' @param data a trades data frame
+##' @param minval a numeric value floor to exclude records below this threshold
+##' @return A list
+##' @export
+getInitialPremium <- function(data,minval=1000) {
+
+  prem <- data %>% dplyr::filter(ctype==30)
+  if(NROW(prem)==0) {
+    prem <- data
+  }
+
+  prem <- prem %>%
+    group_by(commitment) %>%
+    mutate(value=sum(as.numeric(valamt))) %>%
+    ungroup() %>%
+    dplyr::filter(value>=minval) %>%
+    ##arrange(commitment) %>%
+    ##slice(1:1)
+    ##rowwise() %>%
+    dplyr::filter(commitment==min(commitment))
+
+
+  if(NROW(prem)==0) {
+    return(list("premium"=0,"date"=as.Date(NA),"data"=NULL))
+  }
+
+  return(
+    list("premium"=unique(prem$value),
+         "date"=unique(prem$commitment),
+         "data"=prem %>% select(id) %>% mutate(isInitialPremiumSuspect=TRUE)
+         )
+    )
 
 }
