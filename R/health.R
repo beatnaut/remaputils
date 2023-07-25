@@ -108,11 +108,24 @@ ohlcHealthWrapper <- function(asof=Sys.Date(), ohlccodes=NULL, underlying=FALSE,
     ## Remove the NA symbols:
     ohlcObsHealth <- ohlcObsHealth[!is.na(ohlcObsHealth[, "Symbol"]), ]
 
+    if(NROW(ohlcObsHealth)==0) {
+
+      ohlcObsHealth <- initDF(colnames(ohlcObsHealth))
+      print("No OBS!")
+      return(ohlcObsHealth)
+
+    }
+
     ## Get the suspects:
     ohlcObsSuspects <- ohlcObsHealth[apply(ohlcObsHealth, MARGIN=1, function(x) any(trimws(x[2:4]))), ]
 
+    ## Add link DECAF
+    healthCheck <- ohlcObsSuspects
+    healthCheck[, "Link"] <- paste0(gsub("api", "", session[["location"]]), "/ohlc/observation?symbol=", healthCheck[, "Symbol"])
+    healthCheck[, "Link"] <- paste0("<a href='", healthCheck[, "Link"], "'>LINK</a>")
+    healthCheck[sapply(healthCheck, is.infinite)] <- NA
     ## Done, return:
-    ohlcObsSuspects
+    return(healthCheck)
 
 }
 
