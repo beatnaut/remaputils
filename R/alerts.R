@@ -1457,6 +1457,9 @@ alertDecafData <- function(session,
 
     data <- do.call(dataFunc,dataParams)
 
+    if(class(data)!="list") {
+       data <- list(data)
+    }
     ## Run the email using function above
     alertEmail(session,
                data=data,                    
