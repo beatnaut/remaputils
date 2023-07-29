@@ -5,7 +5,7 @@
 ##' @param trades The trades data frame with pxmain, accmain, commitment and qytmain columns:
 ##' @return The same data frame with reversal column added
 ##' @export
-inferReversals <- function(trades) {
+inferReversals_ <- function(trades) {
 
     ## Iterate over trades and construct the composite key from pxmain, accmain, resmain and qtymain
     for (row in 1:NROW(trades)) {
@@ -73,7 +73,7 @@ inferReversals <- function(trades) {
 ##' @param trades The trades data frame with pxmain, accmain, commitment, qytmain, and resmain columns:
 ##' @return The same data frame with reversal column added
 ##' @export
-inferReversalsV2 <- function(trades) {
+inferReversals <- function(trades) {
 
     trades <- trades %>%
       dplyr::mutate(
