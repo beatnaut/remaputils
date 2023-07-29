@@ -7,7 +7,7 @@
 inferReversals(trades)
 }
 \arguments{
-\item{trades}{The trades data frame with pxmain, accmain, commitment and qytmain columns:}
+\item{trades}{The trades data frame with pxmain, accmain, commitment, qytmain, and resmain columns:}
 }
 \value{
 The same data frame with reversal column added
