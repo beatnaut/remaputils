@@ -1455,13 +1455,18 @@ alertDecafData <- function(session,
     ## If not, return NULL:
     itsAlertTime & itsAlertDate || return(NULL)
 
+    if(is.null(dataParams["session"])) {
+      seshParam <- list("session"=session)
+      dataParams <- c(dataParams,seshParam)
+    }
+
     data <- do.call(dataFunc,dataParams)
 
     if(class(data)!="list") {
        data <- list(data)
     }
     ## Run the email using function above
-    alertEmail(session,
+    alertEmail(session=session,
                data=data,                    
                emailParams=emailParams,               
                wdw=window[1:2],                     
