@@ -560,9 +560,9 @@ getInitialPremium <- function(data,minval=1000) {
   }
 
   prem <- prem %>%
-    group_by(commitment) %>%
-    mutate(value=sum(as.numeric(valamt))) %>%
-    ungroup() %>%
+    dplyr::group_by(commitment) %>%
+    dplyr::mutate(value=sum(as.numeric(valamt))) %>%
+    dplyr::ungroup() %>%
     dplyr::filter(value>=minval) %>%
     ##arrange(commitment) %>%
     ##slice(1:1)
@@ -611,12 +611,12 @@ detectTransfers <- function(portfolio,
   }
 
   trades <- trades %>%
-    select(accmain_name, accmain, id, commitment, resmain_ctype, ctype, stype, remarks, qtymain,
+    dplyr::select(accmain_name, accmain, id, commitment, resmain_ctype, ctype, stype, remarks, qtymain,
            pxcost, pxmain, resmain_stype, resmain_symbol, resmain_type, starts_with("tag")) %>%
-    mutate_at(c("qtymain","pxcost","pxmain","id","accmain","ctype"),as.numeric) %>%
-    mutate(commitment=as.Date(commitment)) %>%
-    mutate_at(vars(-commitment,-qtymain,-pxcost,-pxmain,-id,-accmain,-ctype),as.character) %>%
-    rename(account=accmain)
+    dplyr::mutate_at(c("qtymain","pxcost","pxmain","id","accmain","ctype"),as.numeric) %>%
+    dplyr::mutate(commitment=as.Date(commitment)) %>%
+    dplyr::mutate_at(vars(-commitment,-qtymain,-pxcost,-pxmain,-id,-accmain,-ctype),as.character) %>%
+    dplyr::rename(account=accmain)
 
   trades <- do.call("getPortNameByAccount",list(trades,session))
 
@@ -630,17 +630,17 @@ detectTransfers <- function(portfolio,
 
   ## Get transactions
   trans <- getDBObject("quants",session, addParams=list(account__portfolio=portfolio, refccy=unique(trades$rccy))) %>%
-    select(trade, refamt, commitment, type, symbol, valamt) %>%
-    rename(id=trade) %>%
-    mutate(valamt=if_else(is.na(refamt),as.numeric(valamt),as.numeric(refamt))) %>%
-    select(-refamt)
+    dplyr::select(trade, refamt, commitment, type, symbol, valamt) %>%
+    dplyr::rename(id=trade) %>%
+    dplyr::mutate(valamt=if_else(is.na(refamt),as.numeric(valamt),as.numeric(refamt))) %>%
+    dplyr::select(-refamt)
 
   trades <- trades %>%
-    inner_join(trans %>% select(id,valamt), by="id") %>%
-    group_by(across(c(-valamt))) %>%
-    summarise(valamt=sum(valamt)) %>%
-    ungroup() %>%
-    mutate(valamt=sign(qtymain)*valamt)
+    dplyr::inner_join(trans %>% select(id,valamt), by="id") %>%
+    dplyr::group_by(across(c(-valamt))) %>%
+    dplyr::summarise(valamt=sum(valamt)) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(valamt=sign(qtymain)*valamt)
 
   ## Get the cash trades:
   cashTrades <- trades %>%
@@ -667,35 +667,35 @@ detectTransfers <- function(portfolio,
 
   ## Get transaction details for value amount for non-cash flows
   othrFlowTrans <- othrFlow %>%
-    select(id) %>%
-    inner_join(trans, by="id") %>%
-    mutate(inout=1,valamt=round(if_else(type=="Outflow",as.numeric(valamt),-1*as.numeric(valamt))),ctype=20) %>%
-    select(inout, valamt, commitment, symbol, ctype)
+    dplyr::select(id) %>%
+    dplyr::inner_join(trans, by="id") %>%
+    dplyr::mutate(inout=1,valamt=round(if_else(type=="Outflow",as.numeric(valamt),-1*as.numeric(valamt))),ctype=20) %>%
+    dplyr::select(inout, valamt, commitment, symbol, ctype)
 
 
   ## Get non-cash trades that can be joined by remark as extra layer e.g. 151556
   othrFlowTrade <- othrFlow %>% ## get rid of reversals
-    anti_join(othrFlow %>% dplyr::filter(abs(qtymain)>0) %>% mutate(qtymain=-1*qtymain), by=c("qtymain","pxcost","pxmain","commitment","remarks","resmain_ctype","resmain_stype","resmain_symbol")) %>%
+    dplyr::anti_join(othrFlow %>% dplyr::filter(abs(qtymain)>0) %>% mutate(qtymain=-1*qtymain), by=c("qtymain","pxcost","pxmain","commitment","remarks","resmain_ctype","resmain_stype","resmain_symbol")) %>%
     dplyr::filter(!is.na(remarks)) %>%
     dplyr::filter(trimws(remarks)!="") %>%
-    group_by(commitment,remarks) %>%
-    summarise(qtymain=sum(qtymain)) %>%
-    ungroup() %>%
-    mutate(revsign=if_else(qtymain<=0,1,0),rmrk=1,ctype=20) %>%
-    select(-qtymain)
+    dplyr::group_by(commitment,remarks) %>%
+    dplyr::summarise(qtymain=sum(qtymain)) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(revsign=if_else(qtymain<=0,1,0),rmrk=1,ctype=20) %>%
+    dplyr::select(-qtymain)
 
 
   ## Map to back to cash flows to remove true negatives
   cf1<- trades %>%
     dplyr::filter(id %in% fPremium[["data"]]$id) %>%
-    bind_rows(cashTrades) %>% ##[cashTrades$id==14247,] %>%
+    dplyr::bind_rows(cashTrades) %>% ##[cashTrades$id==14247,] %>%
     unique()
   cf <- cf1 %>%
-    mutate(valamt=round(valamt),isTransfer=if_else(ctype==30,TRUE,FALSE),isSuspect=TRUE,revsign=if_else(qtymain>0,1,0)) %>%
-    left_join(othrFlowTrans,by=c("valamt","commitment","resmain_symbol"="symbol","ctype")) %>%
-    left_join(othrFlowTrade,by=c("commitment","remarks","revsign","ctype")) %>%
-    left_join(fPremium[["data"]],by="id") %>%
-    mutate(isSuspect=if_else(is.na(inout)&is.na(rmrk)&abs(valamt)>=transferMin*fPremium[["premium"]],isSuspect,FALSE),
+    dplyr::mutate(valamt=round(valamt),isTransfer=if_else(ctype==30,TRUE,FALSE),isSuspect=TRUE,revsign=if_else(qtymain>0,1,0)) %>%
+    dplyr::left_join(othrFlowTrans,by=c("valamt","commitment","resmain_symbol"="symbol","ctype")) %>%
+    dplyr::left_join(othrFlowTrade,by=c("commitment","remarks","revsign","ctype")) %>%
+    dplyr::left_join(fPremium[["data"]],by="id") %>%
+    dplyr::mutate(isSuspect=if_else(is.na(inout)&is.na(rmrk)&abs(valamt)>=transferMin*fPremium[["premium"]],isSuspect,FALSE),
            ## isTransferSus=if_else(abs(qtymain)<transferMin*fPremium[["premium"]],FALSE,isTransfer),
            isInitialPremiumSuspect=if_else(##aggvalamt==round(fPremium[["premium"]]) & commitment==fPremium[["date"]],TRUE,FALSE
              id %in% fPremium[["data"]]$id,TRUE,FALSE
@@ -703,7 +703,7 @@ detectTransfers <- function(portfolio,
            misclassified=if_else(isInitialPremiumSuspect & resmain_ctype!="CCY",TRUE,FALSE)
 
     ) %>%
-    select(-inout,-rmrk,-revsign)
+    dplyr::select(-inout,-rmrk,-revsign)
 
   if(NROW(cf)!=NROW(cf1)) {
     ##print("Record discrepancy identified, halt process.")
@@ -730,7 +730,7 @@ detectTransfers <- function(portfolio,
   ## ADD THIS BACK
   for(i in 1:length(fpKeywords)) {
    cf <- cf %>%
-     mutate(isSuspect=ifelse(grepl(tolower(paste(fpKeywords[[i]],collapse="|")),tolower(!!sym(names(fpKeywords)[[i]]))),FALSE,isSuspect))
+     dplyr::mutate(isSuspect=ifelse(grepl(tolower(paste(fpKeywords[[i]],collapse="|")),tolower(!!sym(names(fpKeywords)[[i]]))),FALSE,isSuspect))
   }
 
 
@@ -746,10 +746,10 @@ detectTransfers <- function(portfolio,
 
 
   cashFlowMapd <- cf %>%
-    mutate_if(is.logical,function(x) ifelse(is.na(x),FALSE,x)) %>%
-    mutate(initialPremium=fPremium[["premium"]],initialPremiumDate=fPremium[["date"]]) %>%
+    dplyr::mutate_if(is.logical,function(x) ifelse(is.na(x),FALSE,x)) %>%
+    dplyr::mutate(initialPremium=fPremium[["premium"]],initialPremiumDate=fPremium[["date"]]) %>%
     ## mutate_at(c("isTransfer", "isSuspect", "isFirstTransfer"),function(x) ifelse(is.na(x),FALSE,x)) %>%
-    select(!contains(c("isInitialPremiumSuspect", "isTransfer", "isSuspect","misclassified")), isInitialPremiumSuspect, isTransfer, isSuspect,misclassified)
+    dplyr::select(!contains(c("isInitialPremiumSuspect", "isTransfer", "isSuspect","misclassified")), isInitialPremiumSuspect, isTransfer, isSuspect,misclassified)
 
   return(cashFlowMapd)
 
@@ -771,9 +771,9 @@ getInitialPremium <- function(data,minval=1000) {
   }
 
   prem <- prem %>%
-    group_by(commitment) %>%
-    mutate(value=sum(as.numeric(valamt))) %>%
-    ungroup() %>%
+    dplyr::group_by(commitment) %>%
+    dplyr::mutate(value=sum(as.numeric(valamt))) %>%
+    dplyr::ungroup() %>%
     dplyr::filter(value>=minval) %>%
     ##arrange(commitment) %>%
     ##slice(1:1)
@@ -788,7 +788,7 @@ getInitialPremium <- function(data,minval=1000) {
   return(
     list("premium"=unique(prem$value),
          "date"=unique(prem$commitment),
-         "data"=prem %>% select(id) %>% mutate(isInitialPremiumSuspect=TRUE)
+         "data"=prem %>% dplyr::select(id) %>% dplyr::mutate(isInitialPremiumSuspect=TRUE)
          )
     )
 
