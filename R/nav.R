@@ -127,11 +127,11 @@ if(!is.null(portfolio) & xVal) {
 while(fctr>flor) {
 
 outlier <- series %>%
-  dplyr::filter(diffAbs>sd(if_else(is.na(outlierFactor),diffAbs,as.numeric(NA)),na.rm=TRUE)*fctr)
+  dplyr::filter(diffAbs>sd(dplyr::if_else(is.na(outlierFactor),diffAbs,as.numeric(NA)),na.rm=TRUE)*fctr)
 ## outlier defn, e.g. delta > sd(all deltas - ignoring already flagged) * factor of 8 to 3.5 
 series <- series %>%
-  dplyr::mutate(outlierFactor=if_else(is.na(outlierFactor)&NROW(outlier)>0&date %in% outlier$date,fctr,outlierFactor)) %>%
-  dplyr::mutate(outlierFactor=if_else(xVal & !is.na(outlierFactor) & date %in% extVal$date,0,outlierFactor))
+  dplyr::mutate(outlierFactor=dplyr::if_else(is.na(outlierFactor)&NROW(outlier)>0&date %in% outlier$date,fctr,outlierFactor)) %>%
+  dplyr::mutate(outlierFactor=dplyr::if_else(xVal & !is.na(outlierFactor) & date %in% extVal$date,0,outlierFactor))
 ## override the outlier factor for the identified dates, ignoring those defined in previous iteration and/or external valuation
 fctr <- fctr - log10(fctr)
 ## negatively increment the factor for the next iteration
@@ -200,8 +200,8 @@ cleanOutlier <- function(outliers,
     trans <- trans %>%
       dplyr::select(id, trade, refamt, commitment, type, symbol, valamt, quantity, resource, ctype) %>%
       dplyr::mutate(across(c(contains("amt"),quantity),~as.numeric(.x))) %>%
-      dplyr::mutate(sign=if_else(resource %in% inferred,-1*sign(quantity),sign(quantity))) %>% ## if its a counter position, e.g. loan, flip sign
-      dplyr::mutate(amount=if_else(is.na(refamt),as.numeric(valamt),as.numeric(refamt))*sign) %>%
+      dplyr::mutate(sign=dplyr::if_else(resource %in% inferred,-1*sign(quantity),sign(quantity))) %>% ## if its a counter position, e.g. loan, flip sign
+      dplyr::mutate(amount=dplyr::if_else(is.na(refamt),as.numeric(valamt),as.numeric(refamt))*sign) %>%
       dplyr::mutate(residual=round(sum(amount,na.rm=TRUE))) %>% ## compute the residual quant level, resolving NAs to 0
       dplyr::select(-contains("amt"),-quantity) %>%
       dplyr::filter(abs(amount)>0,!resource %in% excluded) ## stop the analysis is there is no residual or the instrument makes it not relevant
@@ -502,10 +502,10 @@ details <- outliersDf %>%
     firstPass=!absurd,
     secondPass=!is.na(rationale)&rationale=="Not Applicable",
     isExtVal=!is.na(outlierFactor)&outlierFactor==0,
-    secondPass=if_else(isExtVal,FALSE,secondPass),
+    secondPass=dplyr::if_else(isExtVal,FALSE,secondPass),
     deepDiveReq=absurd
     ) %>%
-  dplyr::mutate(positCorrection=if_else(secondPass,-1*amount,0),positNAV=if_else(secondPass,corrected,return)) %>%
+  dplyr::mutate(positCorrection=dplyr::if_else(secondPass,-1*amount,0),positNAV=dplyr::if_else(secondPass,corrected,return)) %>%
   dplyr::rename(NAV=return,deltaNAV=diff) %>%
   dplyr::mutate(deltaNAVPct=deltaNAV/NAV) %>%
   dplyr::select(portfolio,portfolioName,portfolioCurrency,date,contains("NAV"),contains("posit"),contains("pass"),isExtVal,deepDiveReq,trades,rationale,outlierFactor)

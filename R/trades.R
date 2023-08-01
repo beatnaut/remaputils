@@ -81,7 +81,7 @@ inferReversals <- function(trades) {
         pxmain_F=str_sub(as.character(numerize(pxmain) * 100000000), 1, 8),
         accmain_F=trimws(as.character(accmain)),
         resmain_F=trimws(str_sub(resmain,str_locate(resmain,"=")[1]+1)),
-        qtymain_F=if_else(!is.na(qtymain),str_sub(as.character(abs(numerize(qtymain)) * 100000000), 1, 8),as.character(NA)),
+        qtymain_F=dplyr::if_else(!is.na(qtymain),str_sub(as.character(abs(numerize(qtymain)) * 100000000), 1, 8),as.character(NA)),
         commitment_F=trimws(str_replace_all(as.character(commitment),"-",""))
       ) %>%
       dplyr::mutate(tradeCompKey=paste0(accmain_F, resmain_F, commitment_F, qtymain_F, pxmain_F)) %>%
@@ -632,7 +632,7 @@ detectTransfers <- function(portfolio,
   trans <- getDBObject("quants",session, addParams=list(account__portfolio=portfolio, refccy=unique(trades$rccy))) %>%
     dplyr::select(trade, refamt, commitment, type, symbol, valamt) %>%
     dplyr::rename(id=trade) %>%
-    dplyr::mutate(valamt=if_else(is.na(refamt),as.numeric(valamt),as.numeric(refamt))) %>%
+    dplyr::mutate(valamt=dplyr::if_else(is.na(refamt),as.numeric(valamt),as.numeric(refamt))) %>%
     dplyr::select(-refamt)
 
   trades <- trades %>%
@@ -669,7 +669,7 @@ detectTransfers <- function(portfolio,
   othrFlowTrans <- othrFlow %>%
     dplyr::select(id) %>%
     dplyr::inner_join(trans, by="id") %>%
-    dplyr::mutate(inout=1,valamt=round(if_else(type=="Outflow",as.numeric(valamt),-1*as.numeric(valamt))),ctype=20) %>%
+    dplyr::mutate(inout=1,valamt=round(dplyr::if_else(type=="Outflow",as.numeric(valamt),-1*as.numeric(valamt))),ctype=20) %>%
     dplyr::select(inout, valamt, commitment, symbol, ctype)
 
 
@@ -681,7 +681,7 @@ detectTransfers <- function(portfolio,
     dplyr::group_by(commitment,remarks) %>%
     dplyr::summarise(qtymain=sum(qtymain)) %>%
     dplyr::ungroup() %>%
-    dplyr::mutate(revsign=if_else(qtymain<=0,1,0),rmrk=1,ctype=20) %>%
+    dplyr::mutate(revsign=dplyr::if_else(qtymain<=0,1,0),rmrk=1,ctype=20) %>%
     dplyr::select(-qtymain)
 
 
@@ -691,16 +691,15 @@ detectTransfers <- function(portfolio,
     dplyr::bind_rows(cashTrades) %>% ##[cashTrades$id==14247,] %>%
     unique()
   cf <- cf1 %>%
-    dplyr::mutate(valamt=round(valamt),isTransfer=if_else(ctype==30,TRUE,FALSE),isSuspect=TRUE,revsign=if_else(qtymain>0,1,0)) %>%
+    dplyr::mutate(valamt=round(valamt),isTransfer=dplyr::if_else(ctype==30,TRUE,FALSE),isSuspect=TRUE,revsign=dplyr::if_else(qtymain>0,1,0)) %>%
     dplyr::left_join(othrFlowTrans,by=c("valamt","commitment","resmain_symbol"="symbol","ctype")) %>%
     dplyr::left_join(othrFlowTrade,by=c("commitment","remarks","revsign","ctype")) %>%
     dplyr::left_join(fPremium[["data"]],by="id") %>%
-    dplyr::mutate(isSuspect=if_else(is.na(inout)&is.na(rmrk)&abs(valamt)>=transferMin*fPremium[["premium"]],isSuspect,FALSE),
-           ## isTransferSus=if_else(abs(qtymain)<transferMin*fPremium[["premium"]],FALSE,isTransfer),
-           isInitialPremiumSuspect=if_else(##aggvalamt==round(fPremium[["premium"]]) & commitment==fPremium[["date"]],TRUE,FALSE
+    dplyr::mutate(isSuspect=dplyr::if_else(is.na(inout)&is.na(rmrk)&abs(valamt)>=transferMin*fPremium[["premium"]],isSuspect,FALSE),
+           isInitialPremiumSuspect=dplyr::if_else(##aggvalamt==round(fPremium[["premium"]]) & commitment==fPremium[["date"]],TRUE,FALSE
              id %in% fPremium[["data"]]$id,TRUE,FALSE
              ),
-           misclassified=if_else(isInitialPremiumSuspect & resmain_ctype!="CCY",TRUE,FALSE)
+           misclassified=dplyr::if_else(isInitialPremiumSuspect & resmain_ctype!="CCY",TRUE,FALSE)
 
     ) %>%
     dplyr::select(-inout,-rmrk,-revsign)
@@ -710,14 +709,6 @@ detectTransfers <- function(portfolio,
     ##return(NULL)
     stop("Record discrepancy identified, halt process.")
   }
-
-  ##if(sum(cf$isInitialPremiumSuspect,na.rm=TRUE)==0) {
-  ##
-  ##cf <- cf %>%
-  ##  bind_rows(trades %>% dplyr::filter(id %in% fPremium[["data"]]$id) %>% mutate(valamt=round(valamt),isTransfer=if_else(ctype==30,TRUE,FALSE),isSuspect=TRUE,isInitialPremiumSuspect=TRUE,misclassified=TRUE))
-  ##
-  ##print("Missclassification Suspect")
-  ##}
 
   if(sum(cf$isInitialPremiumSuspect,na.rm=TRUE)==0) {
     ##print("Initial premium record(s) missing, halt process.")
