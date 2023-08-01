@@ -68,7 +68,7 @@ prefaceSeries <- function(series,scale=5) {
   lower <- max(q1 - scale * iqr,smry["Min."]+(abs(smry["Min."])*scale/100),0)
 
   series <- series %>%
-    dplyr::mutate(absurd=!between(return,lower,upper)) ## anything outside winder defined as 'absurd' 
+    dplyr::mutate(absurd=!dplyr::between(return,lower,upper)) ## anything outside winder defined as 'absurd' 
 
   series$skewness <- 0
 
@@ -236,13 +236,13 @@ cleanOutlier <- function(outliers,
 
     while(!sumFlag & n <= NROW(t)) { ## if more than 10 trades, combo iteration below is too computationally heavy, return all trades
 
-        combos <- combn(NROW(t),n,simplify=FALSE)
+        combos <- utils::combn(NROW(t),n,simplify=FALSE)
         oddDfs <- lapply(combos, function(c) {
             v <- t[-c,]
             return(v)
         })
         oddDf <- data.frame() %>%
-          bind_rows(
+          dplyr::bind_rows(
         oddDfs[lapply(oddDfs, function(df)
           {round(sum(df$amount,na.rm=TRUE))}
         )  == residual##0
