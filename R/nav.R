@@ -382,7 +382,7 @@ if(!tradeLvl) { ## Summarize the data at date level if not trade level
     dplyr::select(-amount) %>%
     dplyr::rename(amount=residual) %>%
     dplyr::group_by(commitment) %>%
-    dplyr::filter(row_number()==1) %>%
+    dplyr::filter(dplyr::row_number()==1) %>%
     dplyr::ungroup()
 }
 
