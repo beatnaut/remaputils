@@ -157,24 +157,24 @@ ohlcHealth <- function(ohlc, asof=Sys.Date(), lookBack=5) {
 
   if(!all(is.na(ohlc$date))) {
   gaps <- data.frame(date=seq.Date(from=min(ohlc$date,na.rm=TRUE),to=max(ohlc$date,na.rm=TRUE),by="day")) %>%
-    left_join(ohlc,by="date") %>%
-    mutate(flag=ifelse(is.na(close),1,0),week=paste(lubridate::year(date),lubridate::week(date))) %>%
-    group_by(week) %>%
-    mutate(gaps=sum(flag)) %>% 
-    ungroup()
+    dplyr::left_join(ohlc,by="date") %>%
+    dplyr::mutate(flag=ifelse(is.na(close),1,0),week=paste(lubridate::year(date),lubridate::week(date))) %>%
+    dplyr::group_by(week) %>%
+    dplyr::mutate(gaps=sum(flag)) %>% 
+    dplyr::ungroup()
 
   flagDate <- gaps  %>%
     dplyr::filter(flag==1&gaps>4) %>%
-    ungroup() %>%
-    arrange(date) %>%
-    slice(1:1)
+    dplyr::ungroup() %>%
+    dplyr::arrange(date) %>%
+    dplyr::slice(1:1)
   }
   if(NROW(flagDate)>0) {
   anygaps <- TRUE
   gapDate <- gaps %>%
     dplyr::filter(!is.na(id),date<flagDate$date)  %>%
-    arrange(desc(date))  %>%
-    slice(1:1)  %>%
+    dplyr::arrange(desc(date))  %>%
+    dplyr::slice(1:1)  %>%
     .[[1]]
   }
 
