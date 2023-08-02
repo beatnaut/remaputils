@@ -53,3 +53,5 @@ recodeIt <- function(data,bp,var,sweep=FALSE) {
 # # "9" ="ctype=='SHRE' & safeGrep(trimConcatenate(`attributes.figistype`), 'COMMONSTOCK') == '1'"
 # # ) 
 
+## res <- getDBObject("resources",session=makeSession(profile="ucaphk"))
+## dataRecoded <- recodeIt(data=res,bp=bp,var="assetclass")
