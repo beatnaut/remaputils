@@ -254,10 +254,6 @@ complianceBreachReport <- function(portfolios, session, divisor="nav", field, mi
         ## Initialse report value:
         report <- NULL
 
-        if (p == 57) {
-            browser()
-        }
-
         ## If there are breaches, populate the report value:
         if (NROW(breaches) > 0) {
 
