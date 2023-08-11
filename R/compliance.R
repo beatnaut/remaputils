@@ -193,6 +193,18 @@ complianceBreachReport <- function(portfolios, session, divisor="nav", field, mi
         ## Exit if no stocks:
         NROW(stocks) > 1 || return(NULL)
 
+        ## Get the accounts of the portfolio:
+        accounts <- getDBObject("accounts", session=session, addParams=list("portfolio"=p))
+
+        ## Append the account type to stocks:
+        stocks[, "htype"] <- accounts[match(stocks[, "account"], accounts[, "id"]), "htype"]
+
+        ## Exclude stocks which are not custody types:
+        stocks <- stocks[stocks[, "htype"] == "Custody Account", ]
+
+        ## Exit if no stocks:
+        NROW(stocks) > 1 || return(NULL)
+
         ## Get resources by stock:
         resources <- getResourcesByStock(stocks, session)
 
@@ -208,9 +220,6 @@ complianceBreachReport <- function(portfolios, session, divisor="nav", field, mi
 
         ## Exit if no stocks:
         NROW(resources) > 1 || return(NULL)
-
-        ## Get the accounts of the portfolio:
-        accounts <- getDBObject("accounts", session=session, addParams=list("portfolio"=p))
 
         ## Get the custodian names for accounts:
         custodian <- accounts[match(resources[, "account"], accounts[, "id"]), "custodian_name"]
@@ -244,6 +253,10 @@ complianceBreachReport <- function(portfolios, session, divisor="nav", field, mi
 
         ## Initialse report value:
         report <- NULL
+
+        if (p == 57) {
+            browser()
+        }
 
         ## If there are breaches, populate the report value:
         if (NROW(breaches) > 0) {
