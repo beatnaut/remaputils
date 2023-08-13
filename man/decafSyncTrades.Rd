@@ -14,7 +14,8 @@ decafSyncTrades(
   sResources = NULL,
   customSymbolFunction = NULL,
   excludeReversals = FALSE,
-  accmainByGuid = FALSE
+  accmainByGuid = FALSE,
+  pushTrades = TRUE
 )
 }
 \arguments{
@@ -37,6 +38,8 @@ decafSyncTrades(
 \item{excludeReversals}{A boolean to determine whether inferReversal is to be used. Default FALSE.}
 
 \item{accmainByGuid}{A boolean to determin whether accmain shall be overwritten with dcf guid. Default=FALSE}
+
+\item{pushTrades}{A boolean for whether trades should be pushed. If FALSE, trades are returns. Default=TRUE.}
 }
 \value{
 NULL.
