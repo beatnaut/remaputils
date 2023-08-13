@@ -981,36 +981,39 @@ decafSyncResources <- function (tSession,
 ##' @param customSymbolFunction Either NULL or a function. Default NULL>
 ##' @param excludeReversals A boolean to determine whether inferReversal is to be used. Default FALSE.
 ##' @param accmainByGuid A boolean to determin whether accmain shall be overwritten with dcf guid. Default=FALSE
+##' @param pushTrades A boolean for whether trades should be pushed. If FALSE, trades are returns. Default=TRUE.
 ##' @return NULL.
 ##' @export
-decafSyncTrades <- function(accounts, sSession, tSession, resources, gte, omitFlag=NULL, sResources=NULL, customSymbolFunction=NULL, excludeReversals=FALSE, accmainByGuid=FALSE) {
+decafSyncTrades <- function(accounts, sSession, tSession, resources, gte, omitFlag=NULL, sResources=NULL, customSymbolFunction=NULL, excludeReversals=FALSE, accmainByGuid=FALSE, pushTrades=TRUE) {
 
     ## Get the account names:
     containerNames <- names(accounts[!substr(names(accounts), 1, 1) == "_"])
 
     ## Get the account wise trades and account info:
-    visionTrades <- getTradesFromContainerNames(containerNames, sSession, type="accounts", gte = gte)
+    ## visionTrades <- getTradesFromContainerNames(containerNames, sSession, type="accounts", gte = gte)
 
     ## Get the vision accounts:
-    visionAccounts <- visionTrades[["container"]]
+    ## visionAccounts <- visionTrades[["container"]]
+    visionAccounts <- fromJSON("visionAccounts.json")
 
     ## Get the vision trades:
-    visionTrades <- visionTrades[["trades"]]
+    ## visionTrades <- visionTrades[["trades"]]
+    visionTrades <- fromJSON("visionTrades.json")
 
-    ## Exclude flagged trades if any.
-    if (!is.null(omitFlag)) {
-        flaggedTrades <- getDBObject("trades", tSession, addParams=list("cflag"=omitFlag))
-    } else {
-        flaggedTrades <- data.frame("guid"=Inf)
-    }
+    visionTrades <- omitRecordsByFlag("trades", visionTrades, tSession, omitFlag)
 
-    ## Exclude the falgged trades:
-    visionTrades <- visionTrades[is.na(match(visionTrades[, "guid"], flaggedTrades[, "guid"])), ]
+    ## ## Exclude flagged trades if any.
+    ## if (!is.null(omitFlag)) {
+    ##     flaggedTrades <- getDBObject("trades", tSession, addParams=list("cflag"=omitFlag))
+    ## } else {
+    ##     flaggedTrades <- data.frame("guid"=Inf)
+    ## }
+
+    ## ## Exclude the falgged trades:
+    ## visionTrades <- visionTrades[is.na(match(visionTrades[, "guid"], flaggedTrades[, "guid"])), ]
 
     ## If no trades, return NULL:
-    if (NROW(visionTrades) == 0) {
-        return(NULL)
-    }
+    NROW(visionTrades) > 0 || return(NULL)
 
     ## Get the transfer key index:
     isTRA <- safeCondition(visionTrades, "stype", "Client Money Transfer")
@@ -1057,20 +1060,25 @@ decafSyncTrades <- function(accounts, sSession, tSession, resources, gte, omitFl
         visionTrades[, "accmain"] <- sapply(accounts[match(as.character(visionTrades[, "accmain_name"]), names(accounts))], function(x) x[["accmain"]])
     }
 
-    ## Set fields to NULL:
-    visionTrades[, c("created", "creator", "updated", "updater", "accmain_guid")] <- NULL
-
     ## Get the cash index:
     isCash <- visionTrades[, "resmain_type"] == "Cash"
 
-    ## Append the cash resmain:
-    visionTrades[isCash, "resmain"] <- resources[match(visionTrades[isCash, "resmain_symbol"], resources[, "symbol"]), "id"]
+    if (!is.null(resources)) {
+        ## Append the cash resmain:
+        visionTrades[isCash, "resmain"] <- resources[match(visionTrades[isCash, "resmain_symbol"], resources[, "symbol"]), "id"]
+    }
 
     ## Exclude reversals?:
     if (excludeReversals) {
         ## Infer and exclude reversal:
         visionTrades <- visionTrades[!inferReversals(visionTrades)[, "reversal"], ]
     }
+
+    ## Return visionTrades dataframe if trades should not be pushed:
+    pushTrades || return(visionTrades)
+
+    ## Set fields to NULL:
+    visionTrades[, c("created", "creator", "updated", "updater", "accmain_guid")] <- NULL
 
     ## Create batches:
     batches <- createBatches(NROW(visionTrades), 500)
@@ -2407,7 +2415,7 @@ xDecafPreemble <- function(sourceSession, targetSession, containerMap, container
                     "resources"=NULL,
                     "portAccMap"=portAccMap))
     }
-    
+
     ## Get the vision resources by stock:
     sourceResources <- getResourcesByStock(sourceStocks, sourceSession)
 
