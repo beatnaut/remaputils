@@ -290,10 +290,11 @@ syncTradesByBatch <- function(trades, session, batchSize=500) {
 ##' @param session The DECAF session info
 ##' @param type The container type
 ##' @param gte A date object to express 'Greater Than' for commitment date of trades. Default is NULL.
+##' @param ... Additional parameters to be passed to the function.
 ##' @return A data-frame with DECAF trades for container.
 ##' @import rdecaf
 ##' @export
-getTradesFromContainerNames <- function(containerNames, session, type, gte=NULL) {
+getTradesFromContainerNames <- function(containerNames, session, type, gte=NULL, ...) {
 
     if (type == "accounts") {
 
@@ -322,7 +323,7 @@ getTradesFromContainerNames <- function(containerNames, session, type, gte=NULL)
     }
 
     ## Get the account wise trades and return:
-    list("trades"=getAccountWiseTrades(accounts, session, gte),
+    list("trades"=getAccountWiseTrades(accounts, session, gte, ...),
          "container"=container)
 
 }
@@ -336,10 +337,11 @@ getTradesFromContainerNames <- function(containerNames, session, type, gte=NULL)
 ##' @param session The DECAF session info.
 ##' @param gte The date after which trades should be considered.
 ##' @param dateType The type, either commitment, settlement, created or updated. Default is commitment.
+##' @param ... Additional parameters for the trades endpoint.
 ##' @return A data-frame with DECAF trades.
 ##' @import rdecaf
 ##' @export
-getAccountWiseTrades <- function(accounts, session, gte=NULL, dateType="commitment") {
+getAccountWiseTrades <- function(accounts, session, gte=NULL, dateType="commitment", ...) {
 
     ## Initialise the trade list:
     trades <- list()
@@ -363,6 +365,9 @@ getAccountWiseTrades <- function(accounts, session, gte=NULL, dateType="commitme
         } else {
             paramsExt <- params
         }
+
+        ## Append any further parameters:
+        paramsExt <- c(paramsExt, list(...))
 
         ## :
         print(sprintf("Retrieving trades for account no %s (id:%s) on %s", i, accounts[i], session[["location"]]))

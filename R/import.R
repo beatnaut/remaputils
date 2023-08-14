@@ -982,23 +982,34 @@ decafSyncResources <- function (tSession,
 ##' @param excludeReversals A boolean to determine whether inferReversal is to be used. Default FALSE.
 ##' @param accmainByGuid A boolean to determin whether accmain shall be overwritten with dcf guid. Default=FALSE
 ##' @param pushTrades A boolean for whether trades should be pushed. If FALSE, trades are returns. Default=TRUE.
+##' @param ... Additional parameters to be passed to the function.
 ##' @return NULL.
 ##' @export
-decafSyncTrades <- function(accounts, sSession, tSession, resources, gte, omitFlag=NULL, sResources=NULL, customSymbolFunction=NULL, excludeReversals=FALSE, accmainByGuid=FALSE, pushTrades=TRUE) {
+decafSyncTrades <- function(accounts,
+                            sSession,
+                            tSession,
+                            resources,
+                            gte,
+                            omitFlag=NULL,
+                            sResources=NULL,
+                            customSymbolFunction=NULL,
+                            excludeReversals=FALSE,
+                            accmainByGuid=FALSE,
+                            pushTrades=TRUE,
+                            ...) {
+
 
     ## Get the account names:
     containerNames <- names(accounts[!substr(names(accounts), 1, 1) == "_"])
 
     ## Get the account wise trades and account info:
-    ## visionTrades <- getTradesFromContainerNames(containerNames, sSession, type="accounts", gte = gte)
+    visionTrades <- getTradesFromContainerNames(containerNames, sSession, type="accounts", gte=gte, ...)
 
     ## Get the vision accounts:
-    ## visionAccounts <- visionTrades[["container"]]
-    visionAccounts <- fromJSON("visionAccounts.json")
+    visionAccounts <- visionTrades[["container"]]
 
     ## Get the vision trades:
-    ## visionTrades <- visionTrades[["trades"]]
-    visionTrades <- fromJSON("visionTrades.json")
+    visionTrades <- visionTrades[["trades"]]
 
     visionTrades <- omitRecordsByFlag("trades", visionTrades, tSession, omitFlag)
 

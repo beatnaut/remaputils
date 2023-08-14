@@ -15,7 +15,8 @@ decafSyncTrades(
   customSymbolFunction = NULL,
   excludeReversals = FALSE,
   accmainByGuid = FALSE,
-  pushTrades = TRUE
+  pushTrades = TRUE,
+  ...
 )
 }
 \arguments{
@@ -40,6 +41,8 @@ decafSyncTrades(
 \item{accmainByGuid}{A boolean to determin whether accmain shall be overwritten with dcf guid. Default=FALSE}
 
 \item{pushTrades}{A boolean for whether trades should be pushed. If FALSE, trades are returns. Default=TRUE.}
+
+\item{...}{Additional parameters to be passed to the function.}
 }
 \value{
 NULL.

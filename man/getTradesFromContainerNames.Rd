@@ -4,7 +4,7 @@
 \alias{getTradesFromContainerNames}
 \title{A function to get trades from session using container names:}
 \usage{
-getTradesFromContainerNames(containerNames, session, type, gte = NULL)
+getTradesFromContainerNames(containerNames, session, type, gte = NULL, ...)
 }
 \arguments{
 \item{containerNames}{A vector with container names}
@@ -14,6 +14,8 @@ getTradesFromContainerNames(containerNames, session, type, gte = NULL)
 \item{type}{The container type}
 
 \item{gte}{A date object to express 'Greater Than' for commitment date of trades. Default is NULL.}
+
+\item{...}{Additional parameters to be passed to the function.}
 }
 \value{
 A data-frame with DECAF trades for container.
