@@ -4,7 +4,13 @@
 \alias{getAccountWiseTrades}
 \title{A function to get account-wise trades from a DECAF instance.}
 \usage{
-getAccountWiseTrades(accounts, session, gte = NULL, dateType = "commitment")
+getAccountWiseTrades(
+  accounts,
+  session,
+  gte = NULL,
+  dateType = "commitment",
+  ...
+)
 }
 \arguments{
 \item{accounts}{A vector with account id's.}
@@ -14,6 +20,8 @@ getAccountWiseTrades(accounts, session, gte = NULL, dateType = "commitment")
 \item{gte}{The date after which trades should be considered.}
 
 \item{dateType}{The type, either commitment, settlement, created or updated. Default is commitment.}
+
+\item{...}{Additional parameters for the trades endpoint.}
 }
 \value{
 A data-frame with DECAF trades.
