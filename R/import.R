@@ -1,3 +1,29 @@
+##' When syncing between 2 decaf instances, this function helps to omit syncing of records by cflag.
+##'
+##' This is the description
+##'
+##' @param endpoint Which decaf endpoint is this regarding? i.e 'resources'.
+##' @param sourceData The data-frame of the source of the same endpoint. i.e the 'resources' data frame at source.
+##' @param session The target session
+##' @param omitFlag The cflag by which we shall omit? i.e 1.
+##' @return The source data frame without the cflagged recrods at target.
+##' @export
+omitRecordsByFlag <- function(endpoint, sourceData, session, omitFlag) {
+
+    ## If omitFlag is null, return data as is:
+    !is.null(omitFlag) || return(sourceData)
+
+    ## Get the flagged records at target:
+    flaggedRecords <- getDBObject("resources", session, addParams=list("cflag"=omitFlag))
+
+    ## If no flagged records, return source data as is:
+    NROW(flaggedRecords) > 1 || return(sourceData)
+
+    ## Exclude the flagged records by guid:
+    sourceData[is.na(match(sourceData[, "guid"], flaggedRecords[, "guid"])), ]
+
+}
+
 ##' Get the asset class data frame with the full names appended
 ##'
 ##' This is the description
