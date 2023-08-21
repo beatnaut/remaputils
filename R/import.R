@@ -6,15 +6,19 @@
 ##' @param sourceData The data-frame of the source of the same endpoint. i.e the 'resources' data frame at source.
 ##' @param session The target session
 ##' @param omitFlag The cflag by which we shall omit? i.e 1.
+##' @param addParams Additional parameters to be added to getDBObjects(endpoint). Default=NULL.
 ##' @return The source data frame without the cflagged recrods at target.
 ##' @export
-omitRecordsByFlag <- function(endpoint, sourceData, session, omitFlag) {
+omitRecordsByFlag <- function(endpoint, sourceData, session, omitFlag, addParams=NULL) {
 
     ## If omitFlag is null, return data as is:
     !is.null(omitFlag) || return(sourceData)
 
+    ## If no source data, return data as is:
+    NROW(sourceData) > 0 || return(sourceData)
+
     ## Get the flagged records at target:
-    flaggedRecords <- getDBObject("resources", session, addParams=list("cflag"=omitFlag))
+    flaggedRecords <- getDBObject(endpoint, session, addParams=c(list("cflag"=omitFlag), addParams))
 
     ## If no flagged records, return source data as is:
     NROW(flaggedRecords) > 1 || return(sourceData)
