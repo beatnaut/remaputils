@@ -1041,7 +1041,7 @@ decafSyncTrades <- function(accounts,
     ## Get the vision trades:
     visionTrades <- visionTrades[["trades"]]
 
-    visionTrades <- omitRecordsByFlag("trades", visionTrades, tSession, omitFlag)
+    visionTrades <- omitRecordsByFlag("trades", visionTrades, tSession, omitFlag, ...)
 
     ## ## Exclude flagged trades if any.
     ## if (!is.null(omitFlag)) {
