@@ -70,6 +70,7 @@ getUnderlyingSymbol <- function(resources, instring="Equity", sweep=FALSE) {
   }
 
   dat <- dat %>%
+    dplyr::select(-underlying) %>%
     dplyr::mutate(underlyingS=dplyr::if_else(stringr::str_detect(symbol,instring),sapply(stringr::str_split(symbol,' '), function(x) paste(x[1],x[2],instring)),as.character(NA))) %>%
     dplyr::left_join(resources %>% dplyr::select(symbol,id) %>% dplyr::rename(underlying=id),by=c("underlyingS"="symbol")) %>%
     dplyr::select(-underlyingS)
