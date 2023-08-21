@@ -4,7 +4,7 @@
 \alias{omitRecordsByFlag}
 \title{When syncing between 2 decaf instances, this function helps to omit syncing of records by cflag.}
 \usage{
-omitRecordsByFlag(endpoint, sourceData, session, omitFlag, addParams = NULL)
+omitRecordsByFlag(endpoint, sourceData, session, omitFlag, ...)
 }
 \arguments{
 \item{endpoint}{Which decaf endpoint is this regarding? i.e 'resources'.}
@@ -15,7 +15,7 @@ omitRecordsByFlag(endpoint, sourceData, session, omitFlag, addParams = NULL)
 
 \item{omitFlag}{The cflag by which we shall omit? i.e 1.}
 
-\item{addParams}{Additional parameters to be added to getDBObjects(endpoint). Default=NULL.}
+\item{...}{Additional parameters to be added to getDBObjects(endpoint).}
 }
 \value{
 The source data frame without the cflagged recrods at target.
