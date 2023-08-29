@@ -210,3 +210,77 @@ dubiousSymbolBBG <- function(symbol) {
     ## Check each split symbol for inconsistency and return:
     sapply(splitSymbol, function(x) length(x) == 1 | all(is.na(match(tail(x), c("Equity", "Corp", "Curncy", "Index", "Comdty")))))
 }
+
+
+##' This function checks whether trade dates are dubious.
+##'
+##' This is a description
+##'
+##' @param endpnt string for the decaf endpoint, e.g. trades.
+##' @param session the rdecaf session.
+##' @param prams the params to prefilter data in addParams of getDBObject. Can be NULL, defaults to last 12 months of data.
+##' @param expr the string for the condition variable to be evaluated within the data. Can be NULL, defaults to filtering 0 prices NOT SEEN.
+##' @param failSafe data frame to return in short circuits. Can be NULL, defaults to empty data frame showing 'no records'.
+##' @param cols vector of the column names to keep - besides mandatory ID - in the returned DF. Defaults to common trades endpoint columns.
+##' @param colNames vector of the stylized column names to use for the returned columns. Can be NULL, in which case the raw name are used.
+##' @param addLink logical indicating whether to add the decaf link. Defaults to TRUE, requires that the endpoint data frame have an 'id' column.
+##' @return The endpoint data-frame with dubious data.
+##' @export
+dubiousData <- function(endpnt,
+                        session,
+                        prams=list("commitment__gte"=Sys.Date()-365),
+                        expr="condition=round(as.numeric(pxmain))==0&!(!is.na(cflag)&cflag==3)",
+                        failSafe=data.frame("No Records"=character()),
+                        cols=c("created","commitment","resmain_symbol","qtymain"),
+                        colNames=c("Created Date","Trade Date","Symbol","QTY"),
+                        addLink=TRUE
+                        ) {
+
+  t <- try(getDBObject(endpnt,session=session,addParams=prams))
+
+  if(class(t)=="try-error") {
+    print(class(t))
+    print("Check Endpoint")
+    return(failSafe)
+  }
+
+  if(!is.null(expr)) {
+
+  t <- try(within(t, eval(parse(text = expr))))
+
+  if(class(t)=="try-error") {
+    print(class(t)) 
+    print("Check Condition")
+    return(failSafe)
+  }
+
+  t <- t %>%
+    dplyr::filter(condition)
+
+  }
+
+  NROW(t) > 0 || return(failSafe)
+
+  t <- t %>%
+    dplyr::select(id,all_of(cols))
+
+  if(is.null(colNames)) {
+    colNames <- col
+  }
+  colnames(t) <- c("id",colNames)
+
+  addLink || return(t %>% dplyr::select(-id))
+
+  link <- stringr::str_replace(session$location,"/api",paste0("/",stringr::str_sub(endpnt,1,nchar(endpnt)-1),"/details/",t$id))
+  t$Link <- paste0("<a href='", link, "'>", t$id, "</a>")
+
+  return(t %>% dplyr::select(-id))
+
+}
+
+
+
+
+
+
+

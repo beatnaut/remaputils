@@ -1455,7 +1455,7 @@ alertDecafData <- function(session,
     ## If not, return NULL:
     itsAlertTime & itsAlertDate || return(NULL)
 
-    if(is.null(dataParams["session"])) {
+    if(is.null(dataParams["session"][[1]])) {
       seshParam <- list("session"=session)
       dataParams <- c(dataParams,seshParam)
     }
