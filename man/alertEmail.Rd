@@ -46,6 +46,6 @@ This is the description
 }
 \examples{
 df <- data.frame(parent=c(rep("A",30),rep("B",30),rep("c",30)),child=sample(1:10000,90))
-emailParams <- list("sendEmail" = TRUE,"from" = "info@telostat.com","emailList" = "andre@telostat.com","isLocal" = FALSE, "subject" = "Example Alert")
+emailParams <- list("sendEmail" = TRUE,"from" = "x","emailList" = "y","isLocal" = FALSE, "subject" = "Example Alert")
 alertEmail(session=session,data=list("summary"=df \%>\% dplyr::group_by(parent) \%>\% dplyr::summarize(v=sum(child)),"details"=df),emailParams=emailParams,wdw=c("23:30:00","23:59:00"),dte="Saturday")
 }
