@@ -2239,3 +2239,55 @@ getDepName <- function(session) {
     return(v)
 
 }
+
+##' This function returns a given data frame with a logical column based on a supplied condition
+##'
+##' This is a description.
+##'
+##' @param df the data frame.
+##' @param expr string specifying the logic used to derive the 'condition' column.
+##' @param group string vector of variable names in case any derivation should be grouped. Defaults to NULL.
+##' @return the supplied df with a new column called 'condition'.
+##' @export
+conditionFn <- function(df,expr,group=NULL) {
+
+  if(!is.null(group)) {
+  
+  df <- df %>%
+    dplyr::group_by(dplyr::across(tidyselect::all_of(group)))
+
+  }
+
+  df <- df %>%
+    dplyr::mutate(condition := !! rlang::parse_expr(expr)) %>%
+    dplyr::ungroup()
+
+  return(df)
+
+}
+
+##' This function the decaf link embeded in an HTML string given inputs.
+##'
+##' This is a description.
+##'
+##' @param session the rdecaf session.
+##' @param endpnt the rdecaf endpoint, e.g. 'trades'.
+##' @param df the data frame supplied if there are to be granular links in a detailed URL. Defaults to NULL for the regular site endpoint page.
+##' @param placeholder the HTMLized text to mask the full URL link. Defaults to 'LINK', but can be the trade ID e.g.
+##' @return a character vector of the HTMLized link(s).
+##' @export
+getEndpointLink <- function(session,endpnt,df=NULL,placeholder="LINK") {
+
+  details <- NULL
+
+  if(!is.null(df)) {
+    details <- paste0("/details/",df$id)
+  }
+
+  link <- stringr::str_replace(session$location,"/api",paste0("/",stringr::str_sub(endpnt,1,nchar(endpnt)-1),details))
+  link <- paste0("<a href='", link, "'>", placeholder, "</a>")
+
+  return(link)
+
+}
+

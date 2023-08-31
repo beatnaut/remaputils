@@ -218,65 +218,87 @@ dubiousSymbolBBG <- function(symbol) {
 ##'
 ##' @param endpnt string for the decaf endpoint, e.g. trades.
 ##' @param session the rdecaf session.
-##' @param prams the params to prefilter data in addParams of getDBObject. Can be NULL, defaults to last 12 months of data.
-##' @param expr the string for the condition variable to be evaluated within the data. Can be NULL, defaults to filtering 0 prices NOT SEEN.
+##' @param prams string containing the expression for the params to prefilter data in addParams of getDBObject. Defaults to NULL.
+##' @param func list containing the function and its corresponding parameters to be applied where applicable. Defaults to NULL.
 ##' @param failSafe data frame to return in short circuits. Can be NULL, defaults to empty data frame showing 'no records'.
-##' @param cols vector of the column names to keep - besides mandatory ID - in the returned DF. Defaults to common trades endpoint columns.
-##' @param colNames vector of the stylized column names to use for the returned columns. Can be NULL, in which case the raw name are used.
+##' @param cols vector of the column names to keep - besides mandatory ID - in the returned DF. Defaults to NULL.
+##' @param colNames vector of the stylized column names to use for the returned columns. Defaults NULL, in which case the raw names from above are used.
+##' @param omitCFlag numeric indicating what cflag to omit if we are to apply omitRecordsByFlag fn. Defaults to NULL.
 ##' @param addLink logical indicating whether to add the decaf link. Defaults to TRUE, requires that the endpoint data frame have an 'id' column.
+##' @param Filter logical indicating whether to filter the data on the condition column from the optional applied func. Defaults to TRUE.
 ##' @return The endpoint data-frame with dubious data.
 ##' @export
-dubiousData <- function(endpnt,
-                        session,
-                        prams=list("commitment__gte"=Sys.Date()-365),
-                        expr="condition=round(as.numeric(pxmain))==0&!(!is.na(cflag)&cflag==3)",
-                        failSafe=data.frame("No Records"=character()),
-                        cols=c("created","commitment","resmain_symbol","qtymain"),
-                        colNames=c("Created Date","Trade Date","Symbol","QTY"),
-                        addLink=TRUE
-                        ) {
+subsetFromDecaf <- function(endpnt,
+                            session,
+                            prams=NULL,
+                            func=NULL,
+                            failSafe=data.frame("No Records"=character()),
+                            cols=NULL,
+                            colNames=NULL,
+                            omitCFlag=NULL,
+                            addLink=TRUE,
+                            Filter=TRUE
+                            ) {
 
-  t <- try(getDBObject(endpnt,session=session,addParams=prams))
-
-  if(class(t)=="try-error") {
-    print(class(t))
-    print("Check Endpoint")
+  is.null(colNames)|length(cols)==length(colNames) || {
+    print("Columns headers length must match columns length!")
     return(failSafe)
   }
 
-  if(!is.null(expr)) {
+  dat <- try(getDBObject(endpnt,session=session,addParams=eval(parse(text=prams))))
 
-  t <- try(within(t, eval(parse(text = expr))))
+  if(class(dat)=="try-error") {
+    print(class(dat))
+    print("Check Endpoint")
+    return(failSafe)
+  }
+  
+  if(!is.null(omitCFlag)) {
+     dat <- omitRecordsByFlag(endpoint=endpnt, sourceData=dat, session=session, omitFlag=omitCFlag)
+  }
 
-  if(class(t)=="try-error") {
-    print(class(t)) 
+  if(!is.null(func)) {
+
+  dat <- do.call(func[["fn"]],c(list(dat),func[["parms"]]))
+
+  if(class(dat)=="try-error") {
+    print(class(dat)) 
     print("Check Condition")
     return(failSafe)
   }
 
-  t <- t %>%
+  if(Filter) {
+
+  dat <- dat %>%
     dplyr::filter(condition)
 
   }
 
-  NROW(t) > 0 || return(failSafe)
+  }
 
-  t <- t %>%
-    dplyr::select(id,all_of(cols))
+  NROW(dat) > 0 || return(failSafe)
+
+  if(!is.null(cols)) {
+
+  dat <- dat %>%
+    dplyr::select(id,tidyselect::all_of(cols))
 
   if(is.null(colNames)) {
     colNames <- col
   }
-  colnames(t) <- c("id",colNames)
+  colnames(dat) <- c("id",colNames)
 
-  addLink || return(t %>% dplyr::select(-id))
+  }
 
-  link <- stringr::str_replace(session$location,"/api",paste0("/",stringr::str_sub(endpnt,1,nchar(endpnt)-1),"/details/",t$id))
-  t$Link <- paste0("<a href='", link, "'>", t$id, "</a>")
+  addLink || return(dat %>% dplyr::select(-id))
 
-  return(t %>% dplyr::select(-id))
+  dat$Link <- getEndpointLink(session=session,endpnt=endpnt,placeholder=dat$id)
+
+  return(dat %>% dplyr::select(-id))
 
 }
+
+
 
 
 
