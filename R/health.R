@@ -210,3 +210,90 @@ dubiousSymbolBBG <- function(symbol) {
     ## Check each split symbol for inconsistency and return:
     sapply(splitSymbol, function(x) length(x) == 1 | all(is.na(match(tail(x), c("Equity", "Corp", "Curncy", "Index", "Comdty")))))
 }
+
+
+##' This function checks whether trade dates are dubious.
+##'
+##' This is a description
+##'
+##' @param endpnt string for the decaf endpoint, e.g. trades.
+##' @param session the rdecaf session.
+##' @param prams string containing the expression for the params to prefilter data in addParams of getDBObject. Defaults to NULL.
+##' @param func list containing the function and its corresponding parameters to be applied where applicable. Defaults to NULL.
+##' @param failSafe data frame to return in short circuits. Can be NULL, defaults to empty data frame showing 'no records'.
+##' @param cols vector of the column names to keep - besides mandatory ID - in the returned DF. Defaults to NULL.
+##' @param colNames vector of the stylized column names to use for the returned columns. Defaults NULL, in which case the raw names from above are used.
+##' @param omitCFlag numeric indicating what cflag to omit if we are to apply omitRecordsByFlag fn. Defaults to NULL.
+##' @param addLink logical indicating whether to add the decaf link. Defaults to TRUE, requires that the endpoint data frame have an 'id' column.
+##' @param Filter logical indicating whether to filter the data on the condition column from the optional applied func. Defaults to TRUE.
+##' @return The endpoint data-frame with dubious data.
+##' @export
+subsetFromDecaf <- function(endpnt,
+                            session,
+                            prams=NULL,
+                            func=NULL,
+                            failSafe=data.frame("No Records"=character()),
+                            cols=NULL,
+                            colNames=NULL,
+                            omitCFlag=NULL,
+                            addLink=TRUE,
+                            Filter=TRUE
+                            ) {
+
+  is.null(colNames)|length(cols)==length(colNames) || {
+    print("Columns headers length must match columns length!")
+    return(failSafe)
+  }
+
+  dat <- try(getDBObject(endpnt,session=session,addParams=eval(parse(text=prams))))
+
+  if(class(dat)=="try-error") {
+    print(class(dat))
+    print("Check Endpoint")
+    return(failSafe)
+  }
+  
+  if(!is.null(omitCFlag)) {
+     dat <- omitRecordsByFlag(endpoint=endpnt, sourceData=dat, session=session, omitFlag=omitCFlag)
+  }
+
+  if(!is.null(func)) {
+
+  dat <- do.call(func[["fn"]],c(list(dat),func[["parms"]]))
+
+  if(class(dat)=="try-error") {
+    print(class(dat)) 
+    print("Check Condition")
+    return(failSafe)
+  }
+
+  if(Filter) {
+
+  dat <- dat %>%
+    dplyr::filter(condition)
+
+  }
+
+  }
+
+  NROW(dat) > 0 || return(failSafe)
+
+  if(!is.null(cols)) {
+
+  dat <- dat %>%
+    dplyr::select(id,tidyselect::all_of(cols))
+
+  if(is.null(colNames)) {
+    colNames <- col
+  }
+  colnames(dat) <- c("id",colNames)
+
+  }
+
+  addLink || return(dat %>% dplyr::select(-id))
+
+  dat$Link <- getEndpointLink(session=session,endpnt=endpnt,placeholder=dat$id)
+
+  return(dat %>% dplyr::select(-id))
+
+}
