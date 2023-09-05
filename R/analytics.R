@@ -1,3 +1,90 @@
+##' A function to compute the return the portfolio weights over a specific periodicity.
+##'
+##' @param p The portfolio id.
+##' @param session The session of the instance.
+##' @param start The start date. Default is 360 days ago from today.
+##' @param end The end date. Default is today.
+##' @param period The memnonic for dateOfPeriod function. Any of D, W, M, Q, Y.
+##' @return A list with the input data and the results, where results are the weights over the periods
+##' @export
+##'
+getPortfolioWeights <- function(p, session, start=Sys.Date()-360, end=Sys.Date(), period="W") {
+
+    ## If start is null, set it to the inception of the portfolio:
+    if (is.null(start)) {
+        start <- min(getDBObject("accounts", session, addParams=list("portfolio"=p))[, "inception"])
+    }
+
+    ## Get the portfolio rccy:
+    rccy <- getDBObject("portfolios", session, addParams=list("id"=p))$rccy
+
+    ## Get the resources for portfolio:
+    resources <- try(getResourcesByStock(getStocks(p, session, date=end, c="portfolio"), session), silent=TRUE)
+
+    ## Exit with NULL if no stocks:
+    class(resources) != "try-error" || return(list("portfolio"=p,
+                                                   "start"=start,
+                                                   "end"=end,
+                                                   "period"=period,
+                                                   "result"=NULL))
+
+    ## Get the asset class:
+    asstClass <- getDBObject("assetclasses", session)
+
+    ## Get the asset class names and heads:
+    resources[, "aClass_name"] <- asstClass[match(resources[, "assetclass"], asstClass[, "id"]), "name"]
+    resources[, "aClass_head"] <- asstClass[match(resources[, "assetclass"], asstClass[, "id"]), "path.0"]
+
+    ## Get the relevant dates:
+    cDates <- as.character(periodDates(period, yearsOfHistory=as.numeric(end-start)/365, endOfWeek="Friday", date=end))
+
+    ## Initialise retval:
+    results <- list()
+
+    ## Iteratve over dates and get the weights:
+    for (cDt in cDates) {
+
+        ## Get the holdings;
+        holdings <- getConsolidationHoldings(session, "portfolios", p, rccy, cDt, charLimit=40, resources)
+
+        ## Print:
+        print(sprintf("Current Date: %s (until %s)", cDt, end))
+        print(noquote("------------------------------------------"))
+
+        ## Compute the net exposure:
+        holdings[, "Net Exposure"] <- abs(holdings[, "Exposure"]) * sign(holdings[, "QTY"])
+
+        ## Prepare the results:
+        results[[cDt]]<- data.frame("symbol"=holdings[, "Symbol"],
+                                    "weight"=round(holdings[, "Net Exposure"] / sum(holdings[, "Net Exposure"]), 4),
+                                    "qtymain"=holdings[, "QTY"],
+                                    "pxmain"=holdings[, "PX Last"],
+                                    "resmain"=holdings[, "ID"],
+                                    "ccymain"=holdings[, "CCY"],
+                                    "ctype"=resources[match(holdings[, "ID"], resources[, "id"]), "ctype"],
+                                    "sector"=resources[match(holdings[, "ID"], resources[, "id"]), "sector"],
+                                    "assetclass"=resources[match(holdings[, "ID"], resources[, "id"]), "assetclass"],
+                                    "assetclass_name"=resources[match(holdings[, "ID"], resources[, "id"]), "aClass_name"],
+                                    "assetclass_head"=resources[match(holdings[, "ID"], resources[, "id"]), "aClass_head"],
+                                    "ohlccode"=resources[match(holdings[, "ID"], resources[, "id"]), "ohlccode"],
+                                    "quantity"=holdings[, "PXFactor"])
+
+        ## Append the final price series symbol:
+        results[[cDt]][, "px_series_symbol"] <- ifelse(isNAorEmpty(results[[cDt]][, "ohlccode"]),
+                                                       results[[cDt]][, "symbol"],
+                                                       results[[cDt]][, "ohlccode"])
+    }
+
+    ## Done, return:
+    return(list("portfolio"=p,
+                "start"=start,
+                "end"=end,
+                "period"=period,
+                "result"=results))
+
+}
+
+
 ##' A function to derive the dividend or coupon per unit from decaf's trades endpoint.
 ##'
 ##' @param session The session of the instance.
