@@ -1,3 +1,56 @@
+##' A function to derive the dividend or coupon per unit from decaf's trades endpoint.
+##'
+##' @param session The session of the instance.
+##' @param ctype The trade ctype. Either 81 or 101. Default is 81.
+##' @param commitment__gte Since which date should the corporate actions be consdered? When NULL for all history. Default is dateOfPeriod(Y-0).
+##' @return A data frame with the corporate action per unit value, resource symbol and id and the corresponding date.
+##' @export
+##'
+getCorporateActionPerUnit <- function(session, ctype=c("81", "101")[1], commitment__gte=dateOfPeriod("Y-0")) {
+
+    ## Get the ctype based trades from system:
+    caTrades <- getDBObject("trades", session=session, addParams=list("ctype"=ctype, "commitment__gte"=commitment__gte))
+
+    ## Create a composite key, resource and commitment:
+    caTrades[, "key"] <- paste0(caTrades[, "resundr"], caTrades[, "commitment"])
+
+    ## Extract to list by key:
+    trdsByKey <- extractToList(caTrades, "key")
+
+    ## Print something ...
+    print("running ...")
+
+    ## Iterate over trades for each unique resource+commitment:
+    retval <- do.call(rbind, lapply(trdsByKey, function(x) {
+
+        ## Get the stocks for respective account(s) which have had the ctype trade:
+        stocks <- getStocks(data.frame("id"=x[, "accmain"]), session, zero = 1, date=x[1, "commitment"]-1, c = "account")
+
+        ## Get the stock(s) for the specific resource:
+        stocks <- stocks[stocks[, "artifact"] == x[1, "resundr"], ]
+
+        ## If not stocks, exit with NULL:
+        NROW(stocks) > 0 || return(NULL)
+
+        ## Get the ctypes traded qty of the first account in the stocks:
+        cash <- x[match(stocks[1, "account"], x[, "accmain"]), "qtymain"]
+
+        ## Construct the data frame:
+        data.frame("value"=numerize(cash) / numerize(stocks[1, "quantity"]),
+                   "symbol"=x[1, "resundr_symbol"],
+                   "resmain"=x[1, "resundr"],
+                   "date"=x[1, "commitment"])
+    }))
+
+    ## Get rid of row names:
+    rownames(retval) <- NULL
+
+    ## Done, return:
+    return(retval)
+
+}
+
+
 ##' A function to compare NAV's between 2 decaf systems.
 ##'
 ##' @param accounts The account mapping list.
