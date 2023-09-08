@@ -898,7 +898,7 @@ computeEvents <- function(context) {
   netValue <- ledger[nrow(ledger),]$valNetRef
   
   investment <- ledger[1,]$valNetRef + if_else(abs(ledger[ledger$tag=="opening",]$qty)>0,sum(ledger[(ledger$isInv&!ledger$isStart)|ledger$isCls,]$valRef*ledger[(ledger$isInv&!ledger$isStart)|ledger$isCls,]$sign,na.rm=TRUE),0) 
-  
+
   unrealized <- netValue - investment
   
   investment <- investment * if_else(ledger[1,]$type=="LOAN",-1,1)
@@ -1211,9 +1211,10 @@ pnlReport <- function(portfolio, since, until, currency, session, res, cashS="CC
 ##' @param portfolio the decaf portfolio id.
 ##' @param until the end date for the pnl relative period calculation.
 ##' @param session the decaf session.
+##' @param symbol string of the instrument symbol to debug. Defaults to NULL.
 ##' @return A list containing the relative period PnL dfs and nav values.
 ##' @export
-compilePnlReport <- function(portfolio, until=Sys.Date(), session) {
+compilePnlReport <- function(portfolio, until=Sys.Date(), session, symbol=NULL) {
     
     pf <- as.data.frame(getResource("portfolios", params=list("page_size"=-1, "format"="csv", "id"=portfolio), session=session))
     
@@ -1250,7 +1251,7 @@ compilePnlReport <- function(portfolio, until=Sys.Date(), session) {
             lapply(seq_along(seqD), function(x) {
                 
                 navBrs <- rdecaf::getResource("fundreport", params=list("fund"=portfolio, ccy=currency, date=seqD[[x]], type="commitment"), session=session)$nav
-                pnlRs <- pnlReport(portfolio=portfolio,since=seqD[[x]],until=until,currency=currency,session=session,res=res)
+                pnlRs <- pnlReport(portfolio=portfolio,since=seqD[[x]],until=until,currency=currency,session=session,res=res,symbol=symbol)
                 
                 cFees <- getDBObject("trades",addParams=list("accmain__portfolio"=portfolio,"remarks__icontains"="custody fee","resmain__ctype"="CCY"),session=session) 
 
@@ -1321,7 +1322,9 @@ selPnlContrCols <- function(df,
                             ) {
 
   if(is.null(df)) {
-    df <-initDF(key,paste0(cols,sfx))
+    df <-initDF(c(key,paste0(cols,sfx))) %>%
+      dplyr::mutate(across(everything(), ~as.character(.x))) %>%
+      dplyr::slice(0:0)
   }
 
   dat <- df[,!names(df) %in% paste0(exc,sfx)]
@@ -1341,11 +1344,12 @@ selPnlContrCols <- function(df,
 ##' @param portfolio the decaf portfolio id.
 ##' @param date the end date for the pnl relative period calculation via compilepnlreport.
 ##' @param session the decaf session.
+##' @param symbol string of the instrument symbol to debug. Defaults to NULL.
 ##' @return A data frame of the relative period pnls in a consolidated contribution report.
 ##' @export
-pnlContribReport <- function(portfolio, date, session) {
+pnlContribReport <- function(portfolio, date, session, symbol=NULL) {
     
-    PnL <- compilePnlReport(portfolio=portfolio, until=date, session=session)
+    PnL <- compilePnlReport(portfolio=portfolio, until=date, session=session,symbol=symbol)
     
     if(is.null(PnL)) {
         return(NULL)
@@ -1354,8 +1358,9 @@ pnlContribReport <- function(portfolio, date, session) {
     navEnd <- PnL[["EndingNAV"]]
 
     pnlS <- lapply(seq_along(PnL$nav), function(x) {
-        ##x <- "ITD"
+        ##x <- "YTD"
         pos <- PnL$relSeries %>% 
+            ##dplyr::filter(relPeriod==x) %>% 
             dplyr::filter(relPeriod==names(PnL$nav)[[x]]) %>% 
             dplyr::mutate(income=if_else(type=="CCY",0,income),
                           assetclass=aClass1,
@@ -1379,7 +1384,7 @@ pnlContribReport <- function(portfolio, date, session) {
 
         totalPnl <- sum(pos$total,na.rm=TRUE)
         perf <- unique(pos$performance)
-        if(sign(totalPnl)!=sign(perf)&round(totalPnl/navEnd,3)==0) {
+        if(!is.na(perf)&sign(totalPnl)!=sign(perf)&round(totalPnl/navEnd,3)==0) {
           totalPnl <- abs(totalPnl) * sign(perf)
         }
 
