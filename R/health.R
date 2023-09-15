@@ -297,3 +297,50 @@ subsetFromDecaf <- function(endpnt,
   return(dat %>% dplyr::select(-id))
 
 }
+
+pxDubiosity <- function(session,
+                        filt="!resmain_ctype %in% c('DEPO','LOAN','CCY') & round(as.numeric(pxmain))<=1",
+                        params="list(commitment__gte=Sys.Date()-365)",
+                        lookBack=365,
+                        tolerance=.5) {
+
+  weird <- getDBObject("trades",session=session,addParams=eval(parse(text=params))) %>%
+    dplyr::filter(eval(parse(text=filt)))
+
+  NROW(weird) > 0 || return(data.frame())
+
+  weird <- weird %>%
+    dplyr::select(resmain_symbol,resmain_ctype,commitment,pxmain) %>% 
+    dplyr::mutate(pxmain=as.numeric(pxmain),commitment=as.Date(commitment)) %>%
+    dplyr::rename(symbol=resmain_symbol,ctype=resmain_ctype) %>%
+    dplyr::group_by(symbol) %>%
+    dplyr::arrange(commitment)
+
+  ohlcobs <- data.frame() %>%
+    dplyr::bind_rows(
+        lapply(unique(weird$symbol), function(x) {
+          obs <- getOhlcObsForSymbol(session=session, symbol=x, lte=weird[weird$symbol==x,][1,]$commitment,lookBack=lookBack)
+
+          NROW(obs) > 0 || return(
+            weird %>%
+              dplyr::filter(symbol==x,pxmain==0) %>%
+              dplyr::mutate(dev=as.numeric(NA),ewma=as.numeric(NA),days=as.numeric(NA))
+          )
+
+          days <- as.numeric(difftime(as.Date(obs[1,]$date), as.Date(obs[NROW(obs),]$date), units="days"))
+          days <- max(1,days,na.rm=TRUE)
+          ewma <- head(na.omit(TTR::EMA(obs[, "close"], n=min(NROW(obs), 10))), 1)
+          
+          dat <- weird %>%
+            dplyr::filter(symbol==x) %>%
+            dplyr::mutate(dev=abs(pxmain/ewma-1),ewma=ewma,days=days) %>%
+            dplyr::filter(dev>tolerance)
+
+          dat 
+
+        })
+      )
+
+    return(ohlcobs)
+
+  }
