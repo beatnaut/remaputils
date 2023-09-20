@@ -944,7 +944,7 @@ computeEvents <- function(context) {
   inv2 <- investment
   inv3 <- ledger[NROW(ledger),]$investmentOrg * if_else(ledger[1,]$type=="LOAN",-1,1)
   
-dat <- data.frame(
+  dat <- data.frame(
     startingNAV=safeNull(ledger[1,]$valRef)
   , startingNAVOrg=safeNull(ledger[1,]$valOrg)
   , capGainsRealized=safeNull(realized)
@@ -987,7 +987,7 @@ dat <- data.frame(
     )
   
   
-  if(dat$startingNAV==0|dat$endingNAV==0|is.na(dat$exposureNet)) {
+  if(max(dat$startingNAV,0,na.rm=TRUE)==0|max(dat$endingNAV,0,na.rm=TRUE)==0|max(dat$exposureNet,0,na.rm=TRUE)) {
     
     sVals <- ledger %>% dplyr::filter(abs(qty)>0) %>% slice(1:1) %>% dplyr::mutate(valRef=sign*valRef,valOrg=sign*valOrg)
     if(NROW(sVals)==0) {sVals <- data.frame(valRef=0,valOrg=0)}
