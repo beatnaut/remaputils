@@ -306,7 +306,7 @@ subsetFromDecaf <- function(endpnt,
 ##' @param filt string of the filter expression to evaluate after pulling the endpoint data. Defaults to non-cash, depo, loan ctypes and pxvalues <1.
 ##' @param params string of the list expressing to evaluate inside addParams call to getdboject. Defaults to last year of relative data.
 ##' @param lookBack numerical value of days to lookback when querying the ohlc data to calculate moving average used for deviation derivation. Defaults to 1 year.
-##' @param tolerance numerical value indicating threshold above which to return records that deviate too far from a moving average. Defaults to 50%.
+##' @param tolerance numerical value indicating threshold above which to return records that deviate too far from a moving average. Defaults to .5.
 ##' @param addLink logical indicating whether to add the decaf link. Defaults to TRUE, requires that the endpoint data frame have an 'id' column.
 ##' @return The data frame containing relevant stylized records.
 ##' @export
