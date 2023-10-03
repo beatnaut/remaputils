@@ -1465,6 +1465,13 @@ alertDecafData <- function(session,
     if(class(data)!="list") {
        data <- list(data)
     }
+
+    ## Stop if no data
+    NROW(data[[1]]) > 0 || {
+        print("No Content To Send!!")
+        return(NULL)
+    }
+
     ## Run the email using function above
     alertEmail(session=session,
                data=data,                    

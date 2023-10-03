@@ -36,6 +36,47 @@ dubiousOHLCcodes <- function(resources, jaccardCoeff) {
 }
 
 
+##' This function checks whether ohlccodes are dubious AFTER loading the resources for a session.
+##'
+##' This is a description
+##'
+##' @param sessionP String of the session profile to use for loading the resources.
+##' @param jaccardCoeff The threshold for the jaccard string distance coefficient.
+##' @return The resource data-frame with dubious ohlccodes.
+##' @export
+dubiousOHLCcodesII <- function(sessionP, jaccardCoeff) {
+
+    ## Load the resources
+    resources <- getDBObject("resources",session=makeSession(profile=sessionP))
+
+    ## Get the resources which have OHLC codes:
+    resourceWithOHLCcode <- resources[!isNAorEmpty(resources[, "ohlccode"]), ]
+
+    ## If none has ohlccodes, return NULL:
+    if (NROW(resourceWithOHLCcode) == 0) {
+        return(NULL)
+    }
+
+    ## Which ones fail to grep the ohlccode in symbol:
+    grepMethod <- apply(resourceWithOHLCcode, MARGIN=1, function(row) safeGrep(row["symbol"], row["ohlccode"]) == "0")
+
+    ## Which ones have a very dissimilar ohlccode compared to symbol:
+    jaccardMethod <- as.numeric(apply(resourceWithOHLCcode, MARGIN=1, function(x) stringdist(as.character(x["symbol"]), as.character(x["ohlccode"]), method="jaccard"))) > jaccardCoeff
+
+    ## Get the dubious ohlc codes:
+    dubiousOHLCcodes <- resourceWithOHLCcode[grepMethod | jaccardMethod,]
+
+    ## If none dubious, return NULL:
+    if (NROW(dubiousOHLCcodes) == 0) {
+        return(NULL)
+    }
+
+    ## Done, return:
+    dubiousOHLCcodes
+
+}
+
+
 ##' This function checks whether trade dates are dubious.
 ##'
 ##' This is a description
@@ -66,10 +107,13 @@ dubiousTradeDates <- function(trades, backdatedness) {
 ##' @param ohlccodes The ohlccodes to be check. If NULL, it gets it from the stocks. Default is NULL.
 ##' @param underlying Shall the underlying be checked as well? Default is FALSE
 ##' @param lookBack The lookback periodin days. Default is 365.
+##' @param bbg logical for whether to run the bbg nomenclature check above.
 ##' @param session The rdecaf session.
 ##' @return A data frame with unhealthy ohlc observations.
 ##' @export
-ohlcHealthWrapper <- function(asof=Sys.Date(), ohlccodes=NULL, underlying=FALSE, lookBack=365, session) {
+ohlcHealthWrapper <- function(asof=Sys.Date(), ohlccodes=NULL, underlying=FALSE, lookBack=365, bbg=FALSE, session) {
+
+    runLink <- FALSE
 
     ## If no ohlc codes are provided, get from stocks:
     if (is.null(ohlccodes)) {
@@ -80,50 +124,107 @@ ohlcHealthWrapper <- function(asof=Sys.Date(), ohlccodes=NULL, underlying=FALSE,
         ## Get the resources:
         resources <- getResourcesByStock(stocks, session, underlying)
 
+        NROW(resources) > 0 || return(data.frame())
+        runLink <- TRUE
+
+        resources <- resources %>%
+          dplyr::mutate(ohlccodeX=dplyr::if_else(is.na(ohlccode),symbol,ohlccode)) %>%
+          dplyr::group_by(ohlccodeX) %>%
+          dplyr::filter(row_number()==1) %>%
+          dplyr::ungroup()
+
         ## Get ohlccodes:
-        ohlccodes <- unique(ifelse(is.na(resources[, "ohlccode"]), resources[, "symbol"], resources[, "ohlccode"]))
+        ##ohlccodes <- unique(ifelse(is.na(resources[, "ohlccode"]), resources[, "symbol"], resources[, "ohlccode"]))
+        ohlccodes <- unique(resources$ohlccodeX)
 
     }
 
     ## Get the ohlc observations:
-    ohlcObs <- lapply(ohlccodes, function(code) getOhlcObsForSymbol(session, code, lte=asof, lookBack=lookBack + 100, excludeWeekends = TRUE, addFields = NULL))
+    ohlcObs <- data.frame() %>%
+      bind_rows(
+      lapply(ohlccodes, function(code) { 
+      ##obs <- getResource("ohlcobservations",params=list("format"="csv", "page_size"=1,"series_symbol"=code,"date__lte"=asof),session=session)
+      ##obs <- getOhlcObsForSymbol(session, code, lte=asof, lookBack=lookBack + 100, excludeWeekends = TRUE, addFields = NULL)
+      obs <- getOhlcObsForSymbol(session, code, lte=asof, lookBack=lookBack, excludeWeekends = TRUE, addFields = NULL)
+      ##NROW(obs) > 0 || return(obs)
+      return(
+        obs %>%
+          dplyr::mutate(across(c(open,high,low,close), ~ as.numeric(.x))) %>%
+          dplyr::mutate(date=as.Date(date)) %>%
+          dplyr::mutate(across(c(id,symbol), ~ as.character(.x)))
+
+      )
+      ##assuming the 100 above is to avoid empty records in API call
+    }
+    )
+    )
 
     ## Mask data if ohlc observation is empty:
-    ohlcObs <- lapply(1:length(ohlccodes), function(i) {
+    # # ohlcObs <- lapply(1:length(ohlccodes), function(i) {
 
-        ## If we have ohlc observations, return the same:
-        NROW(ohlcObs[[i]]) == 0 || return(ohlcObs[[i]])
+    # #     ## If we have ohlc observations, return the same:
+    # #     NROW(ohlcObs[[i]]) == 0 || return(ohlcObs[[i]])
 
-        df <- initDF(colnames(ohlcObs[[i]]))
+    # #     df <- initDF(colnames(ohlcObs[[i]]))
 
-        df[, "symbol"] <- ohlccodes[i]
+    # #     df[, "symbol"] <- ohlccodes[i]
 
-        df
+    # #     df
 
-    })
+    # # })
+
+    ohlcObs <- ohlcObs %>%
+      dplyr::bind_rows(
+        dplyr::bind_cols(
+          data.frame("symbol"=ohlccodes[!ohlccodes %in% ohlcObs$symbol],stringsAsFactors=FALSE),
+          initDF(colnames(ohlcObs)[!colnames(ohlcObs)=="symbol"])
+        )
+        ) %>%
+    dplyr::filter(!is.na(symbol))
+
+    NROW(ohlcObs) > 0 || return(initDF(colnames(ohlcObs)) %>% dplyr::slice(0:0)) ##failsafe
 
     ## Run the ohlc health check on ohlc obs:
-    ohlcObsHealth <- do.call(rbind, lapply(ohlcObs, function(obs) ohlcHealth(obs, asof=Sys.Date(), lookBack=lookBack)))
+    ##ohlcObsHealth <- do.call(rbind, lapply(ohlcObs, function(obs) ohlcHealth(obs, asof=asof, lookBack=lookBack, bbg=bbg)))
+    ohlcObsHealth <- data.frame() %>%
+      dplyr::bind_rows(
+        lapply(unique(ohlcObs$symbol), 
+          function(obs) {
+            ohlcHealth(ohlcObs[ohlcObs$symbol==obs,], asof=asof, lookBack=lookBack, bbg=bbg)
+          }
+        )
+     )
 
     ## Remove the NA symbols:
-    ohlcObsHealth <- ohlcObsHealth[!is.na(ohlcObsHealth[, "Symbol"]), ]
+    ##ohlcObsHealth <- ohlcObsHealth[!is.na(ohlcObsHealth[, "Symbol"]), ]
 
-    if(NROW(ohlcObsHealth)==0) {
+    # # if(NROW(ohlcObsHealth)==0) {
 
-      ohlcObsHealth <- initDF(colnames(ohlcObsHealth))
-      print("No OBS!")
-      return(ohlcObsHealth)
+    # #   ohlcObsHealth <- initDF(colnames(ohlcObsHealth))
+    # #   print("No OBS!")
+    # #   return(ohlcObsHealth)
 
-    }
+    # # }
 
     ## Get the suspects:
     ohlcObsSuspects <- ohlcObsHealth[apply(ohlcObsHealth, MARGIN=1, function(x) any(trimws(x[2:4]))), ]
 
     ## Add link DECAF
     healthCheck <- ohlcObsSuspects
-    healthCheck[, "Link"] <- paste0(gsub("api", "", session[["location"]]), "/ohlc/observation?symbol=", healthCheck[, "Symbol"])
-    healthCheck[, "Link"] <- paste0("<a href='", healthCheck[, "Link"], "'>LINK</a>")
+    ##healthCheck[, "Link"] <- paste0(gsub("api", "", session[["location"]]), "/ohlc/observation?symbol=", healthCheck[, "Symbol"])
+    ##healthCheck[, "Link"] <- paste0("<a href='", healthCheck[, "Link"], "'>LINK</a>")
+    healthCheck$Link <- getEndpointLink(session=session,endpnt="ohlcs",df=healthCheck %>% dplyr::rename(id=Symbol),bridge="/observation?symbol=")
+    if(runLink) {
+      dat <- healthCheck %>%
+        dplyr::inner_join(resources %>% dplyr::select(id,ohlccodeX), by=c("Symbol"="ohlccodeX"))
+      healthCheck$Instrument <- getEndpointLink(session=session,endpnt="resources",df=dat,placeholder=dat$id)
+    }
     healthCheck[sapply(healthCheck, is.infinite)] <- NA
+    ## check for special chars
+    healthCheck  <- healthCheck %>%
+      ##dplyr::filter(Symbol=="1- Loan to Microfin 11%") %>%
+      dplyr::mutate(Link=stringr::str_replace_all(Link,"%","%25"))
+
     ## Done, return:
     return(healthCheck)
 
@@ -137,9 +238,10 @@ ohlcHealthWrapper <- function(asof=Sys.Date(), ohlccodes=NULL, underlying=FALSE,
 ##' @param ohlc A data-frame with the ohlc observations.
 ##' @param asof The date to compare ohlc observations to.
 ##' @param lookBack The number of days to look back for the check.
+##' @param bbg logical for whether to run the bbg nomenclature check above.
 ##' @return A data-frame with state of ohlc series.
 ##' @export
-ohlcHealth <- function(ohlc, asof=Sys.Date(), lookBack=5) {
+ohlcHealth <- function(ohlc, asof=Sys.Date(), lookBack=5, bbg=FALSE) {
 
   ## Convert close to numeric, date to date:
   ohlc[, "close"] <- as.numeric(ohlc[, "close"])
@@ -189,6 +291,10 @@ ohlcHealth <- function(ohlc, asof=Sys.Date(), lookBack=5) {
                        check.names = FALSE,
                        stringsAsFactors = FALSE)
 
+  if(bbg) {
+    result[,"Dubious Symbol"] <- safeNull(dubiousSymbolBBG(result$Symbol))
+  }
+
   ## Done, return:
   result
 
@@ -203,6 +309,9 @@ ohlcHealth <- function(ohlc, asof=Sys.Date(), lookBack=5) {
 ##' @return A vector of length symbols with TRUE or FALSE.
 ##' @export
 dubiousSymbolBBG <- function(symbol) {
+
+    ## Foolproof pre-check
+    length(symbol) > 0 && class(symbol) == "character" || return(TRUE)
 
     ## Split each symbol by space.
     splitSymbol <- strsplit(symbol, " ")
@@ -230,9 +339,9 @@ dubiousSymbolBBG <- function(symbol) {
 ##' @export
 subsetFromDecaf <- function(endpnt,
                             session,
-                            prams=NULL,
+                            prams="",
                             func=NULL,
-                            failSafe=data.frame("No Records"=character()),
+                            failSafe=data.frame("No Data"=character(),stringsAsFactors=FALSE),
                             cols=NULL,
                             colNames=NULL,
                             omitCFlag=NULL,
@@ -243,6 +352,11 @@ subsetFromDecaf <- function(endpnt,
   is.null(colNames)|length(cols)==length(colNames) || {
     print("Columns headers length must match columns length!")
     return(failSafe)
+  }
+
+  ## Extra condition for endpoints with too much data
+  if(endpnt %in% c("trades","quants") & prams == "") { 
+    prams <- "list(commitment__gte=dateOfPeriod('M-0', Sys.Date()))"
   }
 
   dat <- try(getDBObject(endpnt,session=session,addParams=eval(parse(text=prams))))
@@ -259,7 +373,17 @@ subsetFromDecaf <- function(endpnt,
 
   if(!is.null(func)) {
 
-  dat <- do.call(func[["fn"]],c(list(dat),func[["parms"]]))
+  for(i in 1:length(func)) {
+
+  funx <- func[[i]]
+  
+  if(funx[["parms"]]$session=="session") {
+    funx[["parms"]]$session <- eval(parse(text="session"))
+  }
+
+  dat <- do.call(funx[["fn"]],c(list(dat),funx[["parms"]]))
+
+  }
 
   if(class(dat)=="try-error") {
     print(class(dat)) 
@@ -267,7 +391,7 @@ subsetFromDecaf <- function(endpnt,
     return(failSafe)
   }
 
-  if(Filter) {
+  if(Filter & any(colnames(dat)=="condition")) {
 
   dat <- dat %>%
     dplyr::filter(condition)
@@ -292,7 +416,7 @@ subsetFromDecaf <- function(endpnt,
 
   addLink || return(dat %>% dplyr::select(-id))
 
-  dat$Link <- getEndpointLink(session=session,endpnt=endpnt,placeholder=dat$id)
+  dat$Link <- getEndpointLink(session=session,endpnt=endpnt,df=dat,placeholder=dat$id)
 
   return(dat %>% dplyr::select(-id))
 
