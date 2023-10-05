@@ -381,7 +381,7 @@ alertsComplianceBreachInspector <- function(session,
 ##' @return A data-frame of positions which are duplicated in terms of isin.
 ##' @import rdecaf
 ##' @export
-duplicatedIsinInPortfolios <- function(accounts=NULL, resources, session) {
+duplicatedIsinInPortfolios <- function(resources, session, accounts=NULL) {
 
     ## If no accounts given, retriev all accounts:
     if (is.null(accounts)) {

@@ -371,25 +371,27 @@ subsetFromDecaf <- function(endpnt,
      dat <- omitRecordsByFlag(endpoint=endpnt, sourceData=dat, session=session, omitFlag=omitCFlag)
   }
 
-  if(!is.null(func)) {
+  ##start loop
+  fns <- length(func)
+  cnt <- 1
 
-  for(i in 1:length(func)) {
+  while(fns>0) {
 
-  funx <- func[[i]]
+  funx <- func[[cnt]]
+
+  if(stringr::str_detect(funx[["fn"]],"<-")) {
+
+    funCust <- eval(parse(text=sapply(stringr::str_split(funx[["fn"]],"<-"), function(x) x[length(x)])))
+    funx[["fn"]] <- "funCust"
+
+  }
   
-  if(funx[["parms"]]$session=="session") {
+  ##workaround for nested session when its required as a param
+  if(any(names(funx[["parms"]])=="session") && funx[["parms"]]$session=="session") { 
     funx[["parms"]]$session <- eval(parse(text="session"))
   }
 
   dat <- do.call(funx[["fn"]],c(list(dat),funx[["parms"]]))
-
-  }
-
-  if(class(dat)=="try-error") {
-    print(class(dat)) 
-    print("Check Condition")
-    return(failSafe)
-  }
 
   if(Filter & any(colnames(dat)=="condition")) {
 
@@ -398,6 +400,16 @@ subsetFromDecaf <- function(endpnt,
 
   }
 
+  ##increment
+  fns <- fns - 1
+  cnt <- cnt + 1
+
+  }
+
+  if(class(dat)=="try-error") {
+    print(class(dat)) 
+    print("Check Condition")
+    return(failSafe)
   }
 
   NROW(dat) > 0 || return(failSafe)
@@ -414,10 +426,11 @@ subsetFromDecaf <- function(endpnt,
 
   }
 
-  addLink || return(dat %>% dplyr::select(-id))
+  addLink || return(cleanDfReturn(dat))
 
+  ##Requires ID column!!
   dat$Link <- getEndpointLink(session=session,endpnt=endpnt,df=dat,placeholder=dat$id)
 
-  return(dat %>% dplyr::select(-id))
+  return(cleanDfReturn(dat))
 
 }

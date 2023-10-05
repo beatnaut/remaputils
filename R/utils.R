@@ -2293,3 +2293,23 @@ getEndpointLink <- function(session,endpnt,df=NULL,placeholder="LINK",bridge="/d
 
 }
 
+
+##' This function removes undesired columns from a returned data frame.
+##'
+##' This is a description.
+##'
+##' @param df the data frame.
+##' @param col the undesired column string. Defaults to id.
+##' @return a cleaned data frame.
+##' @export
+cleanDfReturn <- function(df,col="id") {
+
+  any(colnames(df)==col) || return(df)
+
+  dat <- df %>%
+      dplyr::select(-c(col))
+
+  return(dat)
+
+}
+
