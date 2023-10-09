@@ -338,6 +338,8 @@ subsetFromDecaf <- function(endpnt,
 
   funx <- func[[cnt]]
 
+  print(funx)
+
   if(stringr::str_detect(funx[["fn"]],"<-")) {
 
     funCust <- eval(parse(text=sapply(stringr::str_split(funx[["fn"]],"<-"), function(x) x[length(x)])))
