@@ -516,7 +516,7 @@ ansbacherResourcePreemble <- function(records, accounts, resources, session, ...
     }
 
     return(list("records"=origRecords, 
-                "resources"=##getSystemResources(session)
+                ##"resources"=getSystemResources(session)
                 "resources"=getDBObject("resources",session=session)
                 ))
 }
