@@ -386,7 +386,9 @@ subsetFromDecaf <- function(endpnt,
   }
 
   addLink || return(cleanDfReturn(dat))
-                                      
+
+  ## Requires an ID column
+
   dat$Link <- getEndpointLink(session=session,endpnt=endpnt,df=dat,placeholder=dat$id)
 
   return(cleanDfReturn(dat))
