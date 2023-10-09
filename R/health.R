@@ -280,7 +280,7 @@ dubiousSymbolBBG <- function(symbol) {
 }
 
 
-##' This function checks whether trade dates are dubious.
+##' This function subsets data from a decaf endpoint and styles it for email ready use.
 ##'
 ##' This is a description
 ##'
@@ -386,10 +386,79 @@ subsetFromDecaf <- function(endpnt,
   }
 
   addLink || return(cleanDfReturn(dat))
-
-  ##Requires ID column!!
+                                      
   dat$Link <- getEndpointLink(session=session,endpnt=endpnt,df=dat,placeholder=dat$id)
 
   return(cleanDfReturn(dat))
+
+}
+
+##' This function is an iteration of the subset function above, specifc for trades endpoint.
+##'
+##' This is a description
+##'
+##' @param session the rdecaf session.
+##' @param filt string of the filter expression to evaluate after pulling the endpoint data. Defaults to non-cash, depo, loan ctypes and pxvalues <1.
+##' @param params string of the list expressing to evaluate inside addParams call to getdboject. Defaults to last year of relative data.
+##' @param lookBack numerical value of days to lookback when querying the ohlc data to calculate moving average used for deviation derivation. Defaults to 1 year.
+##' @param tolerance numerical value indicating threshold above which to return records that deviate too far from a moving average. Defaults to .5.
+##' @param addLink logical indicating whether to add the decaf link. Defaults to TRUE, requires that the endpoint data frame have an 'id' column.
+##' @return The data frame containing relevant stylized records.
+##' @export
+tradePxDubiosity <- function(session,
+                             filt="!resmain_ctype %in% c('DEPO','LOAN','CCY') & round(as.numeric(pxmain))<=1",
+                             params="list(commitment__gte=Sys.Date()-365)",
+                             lookBack=365,
+                             tolerance=.5,
+                             addLink=TRUE) {
+
+  weird <- getDBObject("trades",session=session,addParams=eval(parse(text=params))) %>%
+    dplyr::filter(eval(parse(text=filt)))
+
+  NROW(weird) > 0 || return(data.frame())
+
+  weird <- weird %>%
+    dplyr::select(id,resmain_symbol,resmain_ctype,commitment,pxmain,qtymain) %>% 
+    dplyr::mutate(id=as.character(id),Price=as.numeric(pxmain),QTY=as.numeric(qtymain),Date=as.Date(commitment)) %>%
+    dplyr::rename(Symbol=resmain_symbol,Type=resmain_ctype) %>%
+    dplyr::group_by(Symbol) %>%
+    dplyr::arrange(Date) %>%
+    dplyr::select(id,Symbol,Type,Date,Price,QTY)
+
+  dat <- data.frame() %>%
+    dplyr::bind_rows(
+        lapply(unique(weird$Symbol), function(x) {
+          obs <- getOhlcObsForSymbol(session=session, symbol=x, lte=weird[weird$Symbol==x,][1,]$Date,lookBack=lookBack)
+
+          NROW(obs) > 0 || return(
+            weird %>%
+              dplyr::filter(Symbol==x,Price==0) 
+          )
+
+          days <- as.numeric(difftime(as.Date(obs[1,]$date), as.Date(obs[NROW(obs),]$date), units="days"))
+          days <- max(1,days,na.rm=TRUE)
+          ewma <- head(na.omit(TTR::EMA(obs[, "close"], n=min(NROW(obs), 10))), 1)
+          
+          dat <- weird %>%
+            dplyr::filter(Symbol==x) %>%
+            dplyr::mutate(dev=abs(Price/ewma-1),ewma=ewma,days=days) %>%
+            dplyr::filter(dev>tolerance) %>%
+            dplyr::select(-c(dev,ewma,days))
+
+          dat 
+
+        })
+      )
+
+    NROW(dat) > 0 || return(dat)
+
+    dat <- dat %>%
+      dplyr::mutate(across(is.numeric, ~beautify(round(.x,2))))
+
+    addLink || return(dat %>% dplyr::select(-id))
+
+    dat$Link <- getEndpointLink(session=session,endpnt="trades",df=dat,placeholder=dat$id)
+
+    return(dat %>% dplyr::select(-id))    
 
 }

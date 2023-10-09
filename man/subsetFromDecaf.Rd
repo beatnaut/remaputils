@@ -2,7 +2,7 @@
 % Please edit documentation in R/health.R
 \name{subsetFromDecaf}
 \alias{subsetFromDecaf}
-\title{This function checks whether trade dates are dubious.}
+\title{This function subsets data from a decaf endpoint and styles it for email ready use.}
 \usage{
 subsetFromDecaf(
   endpnt,
