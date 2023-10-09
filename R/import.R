@@ -854,7 +854,8 @@ decafSyncResources <- function (tSession,
     ##:
     if (is.null(tResources)) {
         ## Get target resources:
-        tResources <- getSystemResources(tSession)
+        ##tResources <- getSystemResources(tSession)
+        tResources <- getDBObject("resources",session=tSession)
     }
 
     ## Get the NA resources:
@@ -991,7 +992,8 @@ decafSyncResources <- function (tSession,
     response <- pushPayload(payload=payload, session=tSession, import=FALSE, inbulk=TRUE, params=list(sync="True"))
 
     ## Get target resources and return:
-    return(list("targetResources"=getSystemResources(tSession),
+    return(list("targetResources"=##getSystemResources(tSession)
+                  getDBObject("resources",session=tSession),
                 "sourceResources"=origResources,
                 "ohlcMap"=ohlcMap))
 }
