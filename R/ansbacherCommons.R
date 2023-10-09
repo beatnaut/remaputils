@@ -381,7 +381,8 @@ ansbacherForexResourceMapper <- function(data, accounts, resources, session, ...
 
         ## Assign the resulting resource id:
         data[naResmain, "resmain"] <- sapply(retval, function(x) x$id)
-        resources <- getSystemResources(session)
+        ##resources <- getSystemResources(session)
+        resources <- getDBObject("resources",session=session)
     }
 }
 
@@ -402,7 +403,8 @@ ansbacherResourcePreemble <- function(records, accounts, resources, session, ...
     ## If resources is empty, create USD:
     if (NROW(resources) == 0) {
         createCashResource(data.frame("symbol"="USD"), session)
-        resources <- getSystemResources(session)
+        ##resources <- getSystemResources(session)
+        resources <- getDBObject("resources",session=session)
     }
 
     ## Match the resmains and append:
@@ -513,7 +515,10 @@ ansbacherResourcePreemble <- function(records, accounts, resources, session, ...
         abacherResources <- pictetCreateResources(abacherResources, session)
     }
 
-    return(list("records"=origRecords, "resources"=getSystemResources(session)))
+    return(list("records"=origRecords, 
+                "resources"=##getSystemResources(session)
+                "resources"=getDBObject("resources",session=session)
+                ))
 }
 
 
@@ -642,7 +647,8 @@ ansbacherShorttermMapper <- function(data, accounts, resources, session, ...) {
 
         ## Assign the resulting resource id:
         data[naResmain, "resmain"] <- sapply(response[[1]][["artifacts"]], function(x) x[[1]])
-        resources <- getSystemResources(session)
+        ##resources <- getSystemResources(session)
+        resources <- getDBObject("resources",session=session)
     }
 
 
@@ -922,7 +928,8 @@ ansbacherForexMapper <- function(data, accounts, resources, session, ...) {
 
         ## Assign the resulting resource id:
         data[naResmain, "resmain"] <- sapply(retval, function(x) x$id)
-        resources <- getSystemResources(session)
+        ##resources <- getSystemResources(session)
+        resources <- getDBObject("resources",session=session)
     }
 
     data[, "symbol"] <- resources[match(data[, "resmain"], resources[, "id"]), "symbol"]

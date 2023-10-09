@@ -23,10 +23,12 @@ decafNAVComparison <- function(accounts,
                                charLimit=100) {
 
     ## Get the source resources:
-    sResources <- getSystemResources(sSession)
+    ##sResources <- getSystemResources(sSession)
+    sResources <- getDBObject("resources",session=sSession)
 
     ## Get the target resources:
-    tResources <- getSystemResources(tSession)
+    ##tResources <- getSystemResources(tSession)
+    tResources <- getDBObject("resources",session=tSession)
 
     ## Assing main function to shorter variable name:
     .gcfcn <-getConsolidationFromContainerName
