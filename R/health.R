@@ -339,10 +339,11 @@ subsetFromDecaf <- function(endpnt,
   funx <- func[[cnt]]
 
   print(funx)
+  print(names(funx))
 
-  if(stringr::str_detect(funx[["fn"]],"<-")) {
+  if(stringr::str_detect(funx[[1]],"<-")) {
 
-    funCust <- eval(parse(text=sapply(stringr::str_split(funx[["fn"]],"<-"), function(x) x[length(x)])))
+    funCust <- eval(parse(text=sapply(stringr::str_split(funx[["1"]],"<-"), function(x) x[length(x)])))
     funx[["fn"]] <- "funCust"
 
   }
