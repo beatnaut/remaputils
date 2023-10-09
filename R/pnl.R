@@ -898,7 +898,7 @@ computeEvents <- function(context) {
   netValue <- ledger[nrow(ledger),]$valNetRef
   
   investment <- ledger[1,]$valNetRef + if_else(abs(ledger[ledger$tag=="opening",]$qty)>0,sum(ledger[(ledger$isInv&!ledger$isStart)|ledger$isCls,]$valRef*ledger[(ledger$isInv&!ledger$isStart)|ledger$isCls,]$sign,na.rm=TRUE),0) 
-  
+
   unrealized <- netValue - investment
   
   investment <- investment * if_else(ledger[1,]$type=="LOAN",-1,1)
@@ -1211,9 +1211,10 @@ pnlReport <- function(portfolio, since, until, currency, session, res, cashS="CC
 ##' @param portfolio the decaf portfolio id.
 ##' @param until the end date for the pnl relative period calculation.
 ##' @param session the decaf session.
+##' @param symbol string of the instrument symbol to debug. Defaults to NULL.
 ##' @return A list containing the relative period PnL dfs and nav values.
 ##' @export
-compilePnlReport <- function(portfolio, until=Sys.Date(), session) {
+compilePnlReport <- function(portfolio, until=Sys.Date(), session, symbol=NULL) {
     
     pf <- as.data.frame(getResource("portfolios", params=list("page_size"=-1, "format"="csv", "id"=portfolio), session=session))
     
@@ -1250,7 +1251,7 @@ compilePnlReport <- function(portfolio, until=Sys.Date(), session) {
             lapply(seq_along(seqD), function(x) {
                 
                 navBrs <- rdecaf::getResource("fundreport", params=list("fund"=portfolio, ccy=currency, date=seqD[[x]], type="commitment"), session=session)$nav
-                pnlRs <- pnlReport(portfolio=portfolio,since=seqD[[x]],until=until,currency=currency,session=session,res=res)
+                pnlRs <- pnlReport(portfolio=portfolio,since=seqD[[x]],until=until,currency=currency,session=session,res=res,symbol=symbol)
                 
                 cFees <- getDBObject("trades",addParams=list("accmain__portfolio"=portfolio,"remarks__icontains"="custody fee","resmain__ctype"="CCY"),session=session) 
 
@@ -1297,13 +1298,168 @@ compilePnlReport <- function(portfolio, until=Sys.Date(), session) {
     PnL[["relSeries"]] <- PnL[["relSeries"]] %>%  
         dplyr::mutate(portfolio=pfname,currency=currency)
 
-    PnL[["EndingNAV"]] <-  rdecaf::getResource("fundreport", params=list("fund"=portfolio, ccy=currency, date=until, type="commitment"), session=session)$nav
+    PnL[["EndingNAV"]] <- safeNull(PnL$nav$DTD) ##rdecaf::getResource("fundreport", params=list("fund"=portfolio, ccy=currency, date=until, type="commitment"), session=session)$nav
 
     return(PnL)
 }
 
+##' Helper fn to clean up the PnL output.
+##'
+##' This is the description
+##'
+##' @param df the pnl df, usually from the relative series, e.g. ytd.
+##' @param key string of the column used for joining all the dfs. Defaults to symbol.
+##' @param sfx string of relative series suffix to add to make the column names unique. Defaults to (itd) for inception to date.
+##' @param cols string vector of the column names to add a suffix to. See below.
+##' @param exc string of the column name to exclude. Defaults to no exclusions.
+##' @return A cleaned-up data frame of pnl relative series.
+##' @export
+selPnlContrCols <- function(df,
+                            key="symbol",
+                            sfx="(itd)",
+                            cols=c("unrealised","realised","income","fees","total","total gross","total net","contr"),
+                            exc=NULL
+                            ) {
+
+  if(is.null(df)) {
+    df <-initDF(c(key,paste0(cols,sfx))) %>%
+      dplyr::mutate(across(everything(), ~as.character(.x))) %>%
+      dplyr::slice(0:0)
+  }
+
+  dat <- df[,!names(df) %in% paste0(exc,sfx)]
+
+  dat <- dat %>%
+    dplyr::select(tidyselect::all_of(key),contains(sfx)) %>%
+    dplyr::mutate(across(where(is.logical), ~ as.character(.x)))
+
+  return(dat)
+    
+}
+
+##' Compiler fn that returns the data for the pnl contribution excel report.
+##'
+##' This is the description
+##'
+##' @param portfolio the decaf portfolio id.
+##' @param date the end date for the pnl relative period calculation via compilepnlreport.
+##' @param session the decaf session.
+##' @param symbol string of the instrument symbol to debug. Defaults to NULL.
+##' @return A data frame of the relative period pnls in a consolidated contribution report.
+##' @export
+pnlContribReport <- function(portfolio, date, session, symbol=NULL) {
+    
+    PnL <- compilePnlReport(portfolio=portfolio, until=date, session=session,symbol=symbol)
+    
+    if(is.null(PnL)) {
+        return(NULL)
+    }
+
+    navEnd <- PnL[["EndingNAV"]]
+
+    pnlS <- lapply(seq_along(PnL$nav), function(x) {
+        ##x <- "YTD"
+        pos <- PnL$relSeries %>% 
+            ##dplyr::filter(relPeriod==x) %>% 
+            dplyr::filter(relPeriod==names(PnL$nav)[[x]]) %>% 
+            dplyr::mutate(income=if_else(type=="CCY",0,income),
+                          assetclass=aClass1,
+                          assetclass1=aClass1,
+                          assetclass2=aClass2,
+                          assetclass3=aClass3,
+                          open=if_else(abs(endingQty)>0,"YES","NO"),
+                          quantity=endingQty,
+                          value=endingNAV,
+                          `value(%)`=safeNull(endingNAV/navEnd),
+                          unrealised=capGainsUnrealized,
+                          realised=capGainsRealized,
+                          total=realised+unrealised+income+fees,
+                          `total net`=navEnd-(navBeg+transfer),
+                          `pnl/inv`=safeNull(total/investment),
+                          contr=safeNull(total/starting) ##old incorrect version
+                          ) %>%
+            dplyr::mutate(`total gross`=`total net`-cfees) %>%
+            dplyr::mutate(`pnl/inv`=dplyr::if_else(round(investment)==0,as.numeric(NA),`pnl/inv`))
 
 
+        totalPnl <- sum(pos$total,na.rm=TRUE)
+        perf <- unique(pos$performance)
+        if(!is.na(perf)&sign(totalPnl)!=sign(perf)&round(totalPnl/navEnd,3)==0) {
+          totalPnl <- abs(totalPnl) * sign(perf)
+        }
 
+        pos$pnlRatio <- pos$total/totalPnl
+        notional <- pos$quantity
 
+        pos <- pos %>%
+            dplyr::mutate(contr=pnlRatio*performance) %>%
+            dplyr::select(-assetClass) %>% 
+            dplyr::select(portfolio,name,symbol,currency,contains("assetclass"),open,value,`value(%)`,`pnl/inv`,unrealised,realised,income,fees,total,`total gross`,`total net`,contr,type) %>% 
+            dplyr::select(-type)
+       
+        addNames <- paste0(colnames(pos[,(length(pos)-8):length(pos)]),"(",tolower(names(PnL$nav)[[x]]),")")
+        
+        colnames(pos) <- c(colnames(pos[,1:(length(pos)-9)]),addNames)
 
+        pos$quantity <- notional
+        
+        return(pos)
+
+        
+    }
+        )
+
+    names(pnlS) <- names(PnL$nav)
+    
+    itd <- pnlS[["ITD"]]
+    if(is.null(itd)) {
+    itd <-initDF(c("portfolio","name","isin","symbol","currency","smbc_class","assetclass","assetclass1","assetclass2","assetclass3","open","quantity","value","value(%)",paste0(c("pnl/inv","unrealised","realised","income","fees","total","total gross","total net","contr"),"(itd)")))
+    }
+
+    ytd <- selPnlContrCols(df=pnlS[["YTD"]],
+                    key="symbol",
+                    sfx="(ytd)",
+                    cols=c("pnl/inv","unrealised","realised","income","fees","total","total gross","total net","contr"),
+                    exc=NULL
+                    )
+
+    qtd <- selPnlContrCols(df=pnlS[["QTD"]],sfx="(qtd)",exc="pnl/inv")
+
+    mtd <- selPnlContrCols(df=pnlS[["MTD"]],sfx="(mtd)",exc="pnl/inv")
+   
+    wtd <- selPnlContrCols(df=pnlS[["WTD"]],sfx="(wtd)",exc="pnl/inv")
+    
+    dtd <- selPnlContrCols(df=pnlS[["DTD"]],sfx="(dtd)",exc="pnl/inv")
+    
+    indata <- itd %>% 
+        dplyr::filter(!is.na(symbol)) %>% 
+        left_join(ytd, by="symbol") %>%
+        left_join(qtd, by="symbol") %>%
+        left_join(mtd, by="symbol") %>%
+        left_join(wtd, by="symbol") %>%
+        left_join(dtd, by="symbol") %>% 
+        unique() 
+    
+    ## Get the resources:
+    resources <- safeRbind(lapply(indata[, "symbol"], function(x) getDBObject("resources", session, addParams=list("symbol"=x))), convertToString=TRUE)
+    
+    ## Add the smbc classifciation:
+    smbcClass <- resources[match(indata[, "symbol"], resources[, "symbol"], incomparables=NA), "attributes.smbc_classification"]
+    Isin <- resources[match(indata[, "symbol"], resources[, "symbol"], incomparables=NA), "isin"]
+    
+    indata$isin <- safeNull(Isin)
+    indata$smbc_class <- safeNull(smbcClass)
+  
+    indata <- bind_cols(indata[,c("portfolio","name","isin","symbol","currency","smbc_class","assetclass","assetclass1","assetclass2","assetclass3","open","value","value(%)")],
+                        indata %>% select(contains("itd")),
+                        indata %>% select(contains("ytd")),
+                        indata %>% select(contains("qtd")),
+                        indata %>% select(contains("mtd")),
+                        indata %>% select(contains("wtd")),
+                        indata %>% select(contains("dtd")),
+                        indata %>% select(quantity)
+    )
+                        
+    return(indata)
+    
+}
