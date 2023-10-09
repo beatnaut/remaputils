@@ -2274,20 +2274,42 @@ conditionFn <- function(df,expr,group=NULL) {
 ##' @param endpnt the rdecaf endpoint, e.g. 'trades'.
 ##' @param df the data frame supplied if there are to be granular links in a detailed URL. Defaults to NULL for the regular site endpoint page.
 ##' @param placeholder the HTMLized text to mask the full URL link. Defaults to 'LINK', but can be the trade ID e.g.
+##' @param bridge string representing the text to add to the URL before the specific query. Defaults to details.
 ##' @return a character vector of the HTMLized link(s).
 ##' @export
-getEndpointLink <- function(session,endpnt,df=NULL,placeholder="LINK") {
+getEndpointLink <- function(session,endpnt,df=NULL,placeholder="LINK",bridge="/details/") {
 
   details <- NULL
 
   if(!is.null(df)) {
-    details <- paste0("/details/",df$id)
+    details <- paste0(bridge,df$id)
   }
 
   link <- stringr::str_replace(session$location,"/api",paste0("/",stringr::str_sub(endpnt,1,nchar(endpnt)-1),details))
+  ##link <- stringr::str_replace_all(link,"+","%20")
   link <- paste0("<a href='", link, "'>", placeholder, "</a>")
 
   return(link)
+
+}
+
+
+##' This function removes undesired columns from a returned data frame.
+##'
+##' This is a description.
+##'
+##' @param df the data frame.
+##' @param col the undesired column string. Defaults to id.
+##' @return a cleaned data frame.
+##' @export
+cleanDfReturn <- function(df,col="id") {
+
+  any(colnames(df)==col) || return(df)
+
+  dat <- df %>%
+      dplyr::select(-c(col))
+
+  return(dat)
 
 }
 

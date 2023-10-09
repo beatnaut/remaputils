@@ -4,7 +4,7 @@
 \alias{ohlcHealth}
 \title{This function checks the health of the OHLC observations.}
 \usage{
-ohlcHealth(ohlc, asof = Sys.Date(), lookBack = 5)
+ohlcHealth(ohlc, asof = Sys.Date(), lookBack = 5, bbg = FALSE)
 }
 \arguments{
 \item{ohlc}{A data-frame with the ohlc observations.}
@@ -12,6 +12,8 @@ ohlcHealth(ohlc, asof = Sys.Date(), lookBack = 5)
 \item{asof}{The date to compare ohlc observations to.}
 
 \item{lookBack}{The number of days to look back for the check.}
+
+\item{bbg}{logical for whether to run the bbg nomenclature check above.}
 }
 \value{
 A data-frame with state of ohlc series.

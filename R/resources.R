@@ -1286,3 +1286,67 @@ createResourcesWrapper <- function(data, session) {
     ## Done, return resources:
     data
 }
+
+
+##' A function to find underlying instrument symbols for complex instrument, e.g. minifutures, given resources.
+##'
+##' This is a description.
+##'
+##' @param resources A data-frame with the resource information.
+##' @param Ctype string of the ctype to filter for, defaults to minifutures.
+##' @param keysToRemove string elements as a vector to remove from symbol field, defaults to long and short.
+##' @param extDataNomenc the column names to search in for the extra info. Defaults to 'extdata...'
+##' @param names the column names to apply to the returned DF. Defaults to three symbols representing relevant info for MF.
+##' @return The data-frame with the relevant underlying info extracted.
+##' @export
+findUnderlying <- function(resources,
+                           Ctype='SPMF',
+                           keysToRemove=c(' - LONG',' - SHORT'),
+                           extDataNomenc="extdata.schedule",
+                           names=c("Symbol (Minifuture)","Symbol (Underlying)","Symbol (Schedule)")
+                          ) {
+
+  spmf <- resources %>% 
+    dplyr::filter(ctype == Ctype)
+
+  NROW(spmf) > 0 || return(data.frame("No Data"=character(),check.names=FALSE))
+
+  symbolUnder <- spmf %>%
+     dplyr::left_join(resources %>% dplyr::select(id,symbol) %>% dplyr::rename(symbolX=symbol), by=c("underlying"="id")) %>%
+     dplyr::mutate(symbol=str_remove_all(symbolX,paste0(keysToRemove,collapse="|"))) %>%
+     dplyr::select(symbol) %>%
+     unlist()
+
+  symbol <- spmf %>%
+    ##dplyr::filter(!is.na(underlying)) %>%
+    dplyr::select(contains(extDataNomenc)) %>%
+    dplyr::select(contains("symbol")) %>%
+    dplyr::mutate(group=row_number()) %>%
+    dplyr::rowwise() %>%
+    tidyr::pivot_longer(contains(extDataNomenc),values_to = "symbol") %>%
+    dplyr::ungroup() %>%
+    dplyr::group_by(group) %>%
+    dplyr::mutate(row=row_number()) %>%
+    dplyr::filter(!isNAorEmpty(symbol)) %>%
+    dplyr::filter(row==max(row)) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(symbol) %>%
+    unlist()
+
+  symbolMatch <- symbol == symbolUnder
+  symbolMatch[is.na(symbolMatch)] <- FALSE
+
+  spmf <- dplyr::bind_cols(
+    spmf[!symbolMatch, "symbol"],
+    symbolUnder[!symbolMatch],
+    symbol[!symbolMatch]
+  )
+
+  NROW(spmf) > 0 || return(data.frame("No Data"=character(),check.names=FALSE))
+
+  colnames(spmf) <- names
+
+  return(data.frame(spmf, check.names=FALSE))
+
+}
+

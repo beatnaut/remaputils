@@ -381,7 +381,7 @@ alertsComplianceBreachInspector <- function(session,
 ##' @return A data-frame of positions which are duplicated in terms of isin.
 ##' @import rdecaf
 ##' @export
-duplicatedIsinInPortfolios <- function(accounts=NULL, resources, session) {
+duplicatedIsinInPortfolios <- function(resources, session, accounts=NULL) {
 
     ## If no accounts given, retriev all accounts:
     if (is.null(accounts)) {
@@ -1296,6 +1296,8 @@ alertEmail <- function(session,
                     emailParams=emailParams,
                     attachments=attachment
                     )
+    
+    unlink(dtPath)
 
     return(NULL)
 
@@ -1307,6 +1309,8 @@ alertEmail <- function(session,
                 subject=emailParams[["subject"]],
                 attachments=attachment
                 )
+    
+    unlink(dtPath)
 
 
 }
@@ -1465,6 +1469,13 @@ alertDecafData <- function(session,
     if(class(data)!="list") {
        data <- list(data)
     }
+
+    ## Stop if no data
+    NROW(data[[1]]) > 0 || {
+        print("No Content To Send!!")
+        return(NULL)
+    }
+
     ## Run the email using function above
     alertEmail(session=session,
                data=data,                    
