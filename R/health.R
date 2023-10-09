@@ -36,47 +36,6 @@ dubiousOHLCcodes <- function(resources, jaccardCoeff) {
 }
 
 
-##' This function checks whether ohlccodes are dubious AFTER loading the resources for a session.
-##'
-##' This is a description
-##'
-##' @param sessionP String of the session profile to use for loading the resources.
-##' @param jaccardCoeff The threshold for the jaccard string distance coefficient.
-##' @return The resource data-frame with dubious ohlccodes.
-##' @export
-dubiousOHLCcodesII <- function(sessionP, jaccardCoeff) {
-
-    ## Load the resources
-    resources <- getDBObject("resources",session=makeSession(profile=sessionP))
-
-    ## Get the resources which have OHLC codes:
-    resourceWithOHLCcode <- resources[!isNAorEmpty(resources[, "ohlccode"]), ]
-
-    ## If none has ohlccodes, return NULL:
-    if (NROW(resourceWithOHLCcode) == 0) {
-        return(NULL)
-    }
-
-    ## Which ones fail to grep the ohlccode in symbol:
-    grepMethod <- apply(resourceWithOHLCcode, MARGIN=1, function(row) safeGrep(row["symbol"], row["ohlccode"]) == "0")
-
-    ## Which ones have a very dissimilar ohlccode compared to symbol:
-    jaccardMethod <- as.numeric(apply(resourceWithOHLCcode, MARGIN=1, function(x) stringdist(as.character(x["symbol"]), as.character(x["ohlccode"]), method="jaccard"))) > jaccardCoeff
-
-    ## Get the dubious ohlc codes:
-    dubiousOHLCcodes <- resourceWithOHLCcode[grepMethod | jaccardMethod,]
-
-    ## If none dubious, return NULL:
-    if (NROW(dubiousOHLCcodes) == 0) {
-        return(NULL)
-    }
-
-    ## Done, return:
-    dubiousOHLCcodes
-
-}
-
-
 ##' This function checks whether trade dates are dubious.
 ##'
 ##' This is a description

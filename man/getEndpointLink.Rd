@@ -4,7 +4,13 @@
 \alias{getEndpointLink}
 \title{This function the decaf link embeded in an HTML string given inputs.}
 \usage{
-getEndpointLink(session, endpnt, df = NULL, placeholder = "LINK")
+getEndpointLink(
+  session,
+  endpnt,
+  df = NULL,
+  placeholder = "LINK",
+  bridge = "/details/"
+)
 }
 \arguments{
 \item{session}{the rdecaf session.}
@@ -14,6 +20,8 @@ getEndpointLink(session, endpnt, df = NULL, placeholder = "LINK")
 \item{df}{the data frame supplied if there are to be granular links in a detailed URL. Defaults to NULL for the regular site endpoint page.}
 
 \item{placeholder}{the HTMLized text to mask the full URL link. Defaults to 'LINK', but can be the trade ID e.g.}
+
+\item{bridge}{string representing the text to add to the URL before the specific query. Defaults to details.}
 }
 \value{
 a character vector of the HTMLized link(s).

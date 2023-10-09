@@ -7,9 +7,9 @@
 subsetFromDecaf(
   endpnt,
   session,
-  prams = NULL,
+  prams = "",
   func = NULL,
-  failSafe = data.frame(`No Records` = character()),
+  failSafe = data.frame(`No Data` = character(), stringsAsFactors = FALSE),
   cols = NULL,
   colNames = NULL,
   omitCFlag = NULL,

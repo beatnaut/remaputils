@@ -9,6 +9,7 @@ ohlcHealthWrapper(
   ohlccodes = NULL,
   underlying = FALSE,
   lookBack = 365,
+  bbg = FALSE,
   session
 )
 }
@@ -20,6 +21,8 @@ ohlcHealthWrapper(
 \item{underlying}{Shall the underlying be checked as well? Default is FALSE}
 
 \item{lookBack}{The lookback periodin days. Default is 365.}
+
+\item{bbg}{logical for whether to run the bbg nomenclature check above.}
 
 \item{session}{The rdecaf session.}
 }

@@ -1296,6 +1296,8 @@ alertEmail <- function(session,
                     emailParams=emailParams,
                     attachments=attachment
                     )
+    
+    unlink(dtPath)
 
     return(NULL)
 
@@ -1307,6 +1309,8 @@ alertEmail <- function(session,
                 subject=emailParams[["subject"]],
                 attachments=attachment
                 )
+    
+    unlink(dtPath)
 
 
 }

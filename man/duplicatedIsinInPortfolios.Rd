@@ -4,14 +4,14 @@
 \alias{duplicatedIsinInPortfolios}
 \title{A function to push a payload to a decaf instance.}
 \usage{
-duplicatedIsinInPortfolios(accounts = NULL, resources, session)
+duplicatedIsinInPortfolios(resources, session, accounts = NULL)
 }
 \arguments{
-\item{accounts}{The data-frame with the rdecaf accounts. If NULL, all accounts of session are considered. Default is NULL.}
-
 \item{resources}{The data-frame of the resources in the decaf instance.}
 
 \item{session}{The rdecaf session.}
+
+\item{accounts}{The data-frame with the rdecaf accounts. If NULL, all accounts of session are considered. Default is NULL.}
 }
 \value{
 A data-frame of positions which are duplicated in terms of isin.
