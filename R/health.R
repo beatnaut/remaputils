@@ -96,6 +96,8 @@ ohlcHealthWrapper <- function(asof=Sys.Date(), ohlccodes=NULL, underlying=FALSE,
         ##ohlccodes <- unique(ifelse(is.na(resources[, "ohlccode"]), resources[, "symbol"], resources[, "ohlccode"]))
         ohlccodes <- unique(resources$ohlccodeX)
 
+        print("Finished querying all unique OHLC codes.")
+
     }
 
     ## Get the ohlc observations:
