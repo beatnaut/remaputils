@@ -89,7 +89,7 @@ ohlcHealthWrapper <- function(asof=Sys.Date(), ohlccodes=NULL, underlying=FALSE,
         resources <- resources %>%
           dplyr::mutate(ohlccodeX=dplyr::if_else(is.na(ohlccode),symbol,ohlccode)) %>%
           dplyr::group_by(ohlccodeX) %>%
-          dplyr::filter(row_number()==1) %>%
+          dplyr::filter(dplyr::row_number()==1) %>%
           dplyr::ungroup()
 
         ## Get ohlccodes:
@@ -336,6 +336,7 @@ subsetFromDecaf <- function(endpnt,
   func <- try(lapply(1:NROW(func), function(x) {
     fnctn <- list("fn" = func[x,]$fn)
     prmtr <- func[x,]$parms
+    prmtr[sapply(prmtr, is.na)] <- NULL
     prmtr2<- NULL
     if(!is.na(prmtr[[1]])) {
       prmtr2 <- list("parms"=as.list(prmtr))
