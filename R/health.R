@@ -330,11 +330,32 @@ subsetFromDecaf <- function(endpnt,
      dat <- omitRecordsByFlag(endpoint=endpnt, sourceData=dat, session=session, omitFlag=omitCFlag)
   }
 
+  ##roaster simplifies our list of lists
+  if(class(func)=="data.frame") {
+
+  func <- try(lapply(1:NROW(func), function(x) {
+    fnctn <- list("fn" = func[x,]$fn)
+    prmtr <- func[x,]$parms
+    prmtr2<- NULL
+    if(!is.na(prmtr[[1]])) {
+      prmtr2 <- list("parms"=as.list(prmtr))
+    }
+    c(fnctn,prmtr2)
+  }))
+
+  }
+
+  if(class(func)!="list") {
+    print("Issue with nested function input detected!")
+    return(failSafe)
+  }
+
   ##start loop
+
   fns <- length(func)
   cnt <- 1
 
-  while(fns>0) {
+  while(fns>0 & cnt<10) {
 
   funx <- func[[cnt]]
 
