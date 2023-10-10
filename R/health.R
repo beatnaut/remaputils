@@ -351,6 +351,7 @@ subsetFromDecaf <- function(endpnt,
   }
 
   ##start loop
+  print("Executing Nested Functions")
 
   fns <- length(func)
   cnt <- 1
