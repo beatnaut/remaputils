@@ -102,7 +102,7 @@ ohlcHealthWrapper <- function(asof=Sys.Date(), ohlccodes=NULL, underlying=FALSE,
 
     ## Get the ohlc observations:
     ohlcObs <- data.frame() %>%
-      bind_rows(
+      dplyr::bind_rows(
       lapply(ohlccodes, function(code) { 
       ##obs <- getResource("ohlcobservations",params=list("format"="csv", "page_size"=1,"series_symbol"=code,"date__lte"=asof),session=session)
       ##obs <- getOhlcObsForSymbol(session, code, lte=asof, lookBack=lookBack + 100, excludeWeekends = TRUE, addFields = NULL)
