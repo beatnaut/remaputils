@@ -4,7 +4,7 @@
 \alias{pnlContribReport}
 \title{Compiler fn that returns the data for the pnl contribution excel report.}
 \usage{
-pnlContribReport(portfolio, date, session)
+pnlContribReport(portfolio, date, session, symbol = NULL)
 }
 \arguments{
 \item{portfolio}{the decaf portfolio id.}
@@ -12,6 +12,8 @@ pnlContribReport(portfolio, date, session)
 \item{date}{the end date for the pnl relative period calculation via compilepnlreport.}
 
 \item{session}{the decaf session.}
+
+\item{symbol}{string of the instrument symbol to debug. Defaults to NULL.}
 }
 \value{
 A data frame of the relative period pnls in a consolidated contribution report.
