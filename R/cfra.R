@@ -54,12 +54,11 @@ aggEstimates <- function(lst) {
 ##' @param tick The ticker that identifies the instrument in CFRA DB, e.g. 'AAPL'
 ##' @param exch The exchange that corresponds to the ticker in CFRA DB, e.g. 'NasdaqGS'
 ##' @param lastStarDate The date floor to supply for the star rank elements, for efficiency, e.g. 2023-01-01
-##' @param lastHgltDate The date floor to supply for the star highlights elements, for efficiency, e.g. 2023-01-01
 ##' @param path2Config The path to the file containing the cfra configurations
 
 ##' @return a list containing 3 data frame elements corresponding to stars ranking, research, and estimates data.
 ##' @export
-cfraDetails <- function(tick,exch,lastStarDate=NA,lastHgltDate=NA,path2Config="cfra/cfraAuth.R") {
+cfraDetails <- function(tick,exch,lastStarDate=NA,path2Config="cfra/cfraAuth.R") {
 
     stars <- NULL
 
@@ -89,9 +88,7 @@ cfraDetails <- function(tick,exch,lastStarDate=NA,lastHgltDate=NA,path2Config="c
     estimates <- NULL
 
     path <- paste0("equity/research/stars-full/ticker/",tick,"/exchange/",exch)
-    if(!is.na(lastHgltDate)) {
-    path <- paste0(path,"?date_from=",lastHgltDate+1)
-    }
+
 
     rsrch <- queryCfra(cc,path)[["result"]]
 
@@ -148,7 +145,8 @@ cfraDetails <- function(tick,exch,lastStarDate=NA,lastHgltDate=NA,path2Config="c
     return(list(
     "stars"=stars,
     "research"=hghlts,
-    "estimates"=estimates
+    "estimates"=estimates,
+    "newsletter"=rsrch
     ))
 
 }

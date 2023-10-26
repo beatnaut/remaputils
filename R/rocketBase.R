@@ -19,6 +19,31 @@ getRecs <- function(rb,path,ext,item) {
 
 }
 
+##' Pocketbase dependent function to convert a list element to a data frame by ticker and exchange info.
+##'
+##' This is the description
+##'
+##' @param list the list containing the element.
+##' @param element string of the name of the item to extract from the list, e.g. estimates.
+##' @param dat the data frame to join with in order to get the primary key symbol.
+
+##' @return a data frame of the stacked records.
+##' @export
+xtractDat <- function(list,element,dat) {
+  bindedDf <- data.frame() %>%
+  bind_rows(
+    lapply(list, function(x) {
+      x[[element]]
+    }
+    )
+  ) 
+  NROW(bindedDf) > 0 || return(bindedDf)
+  bindedDf %>%
+  dplyr::inner_join(dat %>% dplyr::select(ticker,exchange,symbol),by=c("ticker","exchange")) %>%
+  dplyr::select(-c(ticker,exchange))
+}
+
+
 ##' Pocketbase dependent function to query a rocketbase endpoint and stack the results X pages at a time.
 ##'
 ##' This is the description
