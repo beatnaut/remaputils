@@ -4,7 +4,7 @@
 \alias{compilePnlReport}
 \title{Compiler fn that returns all elements to construct RELATIVE pnl report.}
 \usage{
-compilePnlReport(portfolio, until = Sys.Date(), session)
+compilePnlReport(portfolio, until = Sys.Date(), session, symbol = NULL)
 }
 \arguments{
 \item{portfolio}{the decaf portfolio id.}
@@ -12,6 +12,8 @@ compilePnlReport(portfolio, until = Sys.Date(), session)
 \item{until}{the end date for the pnl relative period calculation.}
 
 \item{session}{the decaf session.}
+
+\item{symbol}{string of the instrument symbol to debug. Defaults to NULL.}
 }
 \value{
 A list containing the relative period PnL dfs and nav values.

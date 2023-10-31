@@ -1350,3 +1350,151 @@ findUnderlying <- function(resources,
 
 }
 
+##' A function to compare px on option contract strike and its underlying security price to alert users beyond a threshold.
+##'
+##' This is a description.
+##'
+##' @param session list of the rdecaf session.
+##' @param type string of the ctype to filter for, defaults to options.
+##' @param date date of the as-of/up-to date to query active and unexpired instruments. Defaults to current day.
+##' @param attr string of the attributes column identifying the underlying. Defaults to ohlc_underlying.
+##' @param thresh numeric threshold setting the limit of the px convergence to trigger an email alert for. Defaults to 10%.
+##' @return The data-frame with identified underlying instruments of options and relevant info.
+##' @export
+getUnderlyingOptions <- function(session,type="OPT",date=Sys.Date(),attr="attributes.ohlc_underlying",thresh=.1) {
+
+    ## Get the option contracts that havent expired yet
+    options <- getDBObject("resources", session=session, addParams=list(ctype__in=type,expiry__gte=date +1)) 
+
+    ## Stop if we dont have data
+    NROW(options) > 0 || return(data.frame())
+    any(names(options)==attr) || return(data.frame()) 
+
+    ## Analyze only the options where the underlying instrument is identified
+    options <- options %>%
+    dplyr::filter(!is.na(attributes.ohlc_underlying),!is.na(pxmain)) %>%
+    dplyr::mutate(contract=dplyr::if_else(callput,"Call","Put"),Underlying=attributes.ohlc_underlying) %>%
+    dplyr::rename(strike=pxmain,ohlcUnderlying=attributes.ohlc_underlying) 
+    
+    if(any(colnames(options)=="attributes.ticker_underlying")) {
+        options <- options %>%
+          dplyr::mutate(Underlying=dplyr::if_else(is.na(attributes.ticker_underlying),ohlcUnderlying,attributes.ticker_underlying))
+    }
+
+    options <- options %>%
+      dplyr::select(id,contract,ccymain,issuer,name,symbol,ohlccode,strike,expiry,contains("Underlying")) 
+
+    ## Query the last/most relevant px of the underlying
+    options$priceUnderlying <- sapply(options$ohlcUnderlying, function(x) getLatestPx(x,date,session))
+
+    ## Stop if no data
+    options <- options %>%
+    dplyr::filter(!is.na(priceUnderlying)) 
+
+    NROW(options) > 0 || return(data.frame())
+
+    ## Calculate the absolute delta between the strike and current price
+    options <- options %>%
+    dplyr::mutate(delta=abs(priceUnderlying/strike)) %>%
+    dplyr::mutate(delta=dplyr::if_else(is.finite(delta),abs(delta-1),as.numeric(NA))) 
+
+    ##1) loop through remaining symbols to analyze evolution between strike and underlying px
+    ts <- data.frame() %>%
+    dplyr::bind_rows(
+        lapply(options$id, function(x) {
+            print(options[options$id==x,]$symbol)
+            trades <- getDBObject("trades", addParams=list(resmain=x,commitment__lte=date), session=session)
+            t <- dplyr::bind_rows(
+            lapply(unique(trades$accmain), function(y) { 
+                trds <- trades %>% dplyr::filter(accmain==y)
+                abs(sum(trds$qtymain)) > 0 || {
+                    print("Position Closed!")
+                    return(NULL)
+                }
+                trds <- trds %>%
+                dplyr::select(resmain,commitment,accmain) %>%
+                dplyr::arrange(commitment) %>%
+                dplyr::filter(row_number()==1) 
+                return(trds)
+            }
+            )
+            )
+            return(t)
+        }
+        )
+    )
+
+    ## Stop if no trades aka no active holdings
+    NROW(ts) > 0 || return(data.frame())
+
+    options <- options %>%
+    dplyr::inner_join(ts,by=c("id"="resmain")) %>%
+    dplyr::inner_join(getDBObject("accounts",session=session) %>% dplyr::select(id,portfolio_name,portfolio,team_name), by=c("accmain"="id"))
+
+    alert <- options %>%
+    dplyr::filter(delta < thresh)
+
+    NROW(alert) > 0 || return(data.frame())
+
+    alert <- alert %>%
+    dplyr::mutate(pxStrike=beautify(round(strike,2))
+                ,pxLast=beautify(round(priceUnderlying,2))
+                ,pxLastStrikeDelta=percentify(delta)
+    ) %>%
+    dplyr::select(id,portfolio_name,symbol,name,Underlying,commitment,expiry,ccymain,pxStrike,pxLast,pxLastStrikeDelta) %>%
+    dplyr::rename(Portfolio=portfolio_name,Symbol=symbol,Name=name,Issued=commitment,Expiry=expiry,Ccy=ccymain)
+
+    alert$Link <- getEndpointLink(session=session,endpnt="resources",df=alert,placeholder=alert$id) 
+
+    alert <- alert %>%
+    dplyr::select(-id)
+
+    return(alert)
+
+    ## TODO
+
+    ## Generate the plot data - to be run BEFORE options is filtered by thresh!!!
+    ploptions <- options %>%
+    dplyr::group_by(id) %>%
+    dplyr::filter(row_number()==1) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(id,contract,symbol,ohlcUnderlying,commitment,expiry,strike,Underlying)
+
+    ploptionz <- data.frame() %>%
+    dplyr::bind_rows(
+        lapply(1:NROW(ploptions), function(x) {
+            obs <- getOhlcObsForSymbol(session=session,symbol=ploptions[x,]$ohlcUnderlying,lte=ploptions[x,]$expiry,
+            lookBack=as.numeric(ploptions[x,]$expiry-ploptions[x,]$commitment)
+            ) %>%
+            dplyr::select(symbol,date,close) 
+        })
+    ) %>%
+    dplyr::rename(ohlcUnderlying=symbol) %>%
+    dplyr::distinct()
+
+    ploptionz <- ploptionz %>%
+    dplyr::inner_join(ploptions,by="ohlcUnderlying") %>%
+    dplyr::mutate(px=close/strike,issue=date==commitment,exercise=date==expiry,period=-1*as.numeric(expiry-date)) %>%
+    dplyr::group_by(symbol) %>%
+    dplyr::arrange(date) %>%
+    as.data.frame()
+
+    gplot <- ggplot(data=ploptionz, aes(x=period,y=px, label = beautify(round(close)))) +
+    geom_point(aes(shape=Underlying)) +
+    geom_text(aes(color=contract),check_overlap = TRUE,angle = 45,hjust=1) +
+    geom_line(aes(linetype=symbol)) +
+    ##facet_wrap(~contract) +
+    theme_classic() + 
+    scale_x_continuous(breaks=ploptionz$period,limits = c(floor(1.1*min(ploptionz$period)), min(0,ceiling(.9*max(ploptionz$period))))) +
+    scale_y_continuous(labels = scales::percent) +
+    labs(title="Active Option Contract(s): Underlying Price Evolution"
+        ,x="Day(s) to Expiration"
+        ,y="Delta PX (%Strike)"
+        ,color='Option Type'
+        ,linetype="Option Contract"
+        ,shape="Underlying Security") +
+    geom_vline(xintercept=ploptionz[ploptionz$issue,]$period,linetype = "dotted") +
+    geom_vline(xintercept=ploptionz[ploptionz$exercise,]$period,linetype = "dashed") +
+    geom_hline(yintercept=1,linetype="twodash",color="red")
+
+}
