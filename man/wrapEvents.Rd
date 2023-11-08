@@ -4,12 +4,14 @@
 \alias{wrapEvents}
 \title{Wrapper function to return consumable PnL data.}
 \usage{
-wrapEvents(pnlst, res)
+wrapEvents(pnlst, res, session = NULL)
 }
 \arguments{
 \item{pnlst}{the pnl list of data elements from the return value of bare get.}
 
 \item{res}{the df containing the asset class elements to overwrite faulty data from getStocksAndAssets.}
+
+\item{session}{the decaf session. Defaults to NULL TODO.}
 }
 \value{
 A list containing the the granular ledger info from the above and a summarized one liner position data frame of pnl agg info.
