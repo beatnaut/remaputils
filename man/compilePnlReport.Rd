@@ -9,7 +9,7 @@ compilePnlReport(
   until = Sys.Date(),
   session,
   symbol = NULL,
-  ytd = FALSE
+  ytd = NULL
 )
 }
 \arguments{
@@ -21,7 +21,7 @@ compilePnlReport(
 
 \item{symbol}{string of the instrument symbol to debug. Defaults to NULL.}
 
-\item{ytd}{logical defining if we should shortcut only for YTD. Defaults to false.}
+\item{ytd}{logical defining if we should shortcut only for YTD, or other desired period. Defaults to NULL for ALL.}
 }
 \value{
 A list containing the relative period PnL dfs and nav values.
