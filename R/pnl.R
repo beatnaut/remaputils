@@ -1244,7 +1244,7 @@ contextEvents <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
     for (i in 1:sum(as.numeric(buyNsell$sold))) {
 
       sellDate <- as.Date(fifo[fifo$sold,][i,]$date)
-      sellPrice <- as.Date(fifo[fifo$sold,][i,]$px)
+      sellPrice <- as.numeric(fifo[fifo$sold,][i,]$px)
 
       qtySold  <- fifo %>% dplyr::filter(sold,date==sellDate,is.na(cogs)) %>% dplyr::filter(row_number()==1) %>% dplyr::select(qty) %>% as.numeric() * -1
 
