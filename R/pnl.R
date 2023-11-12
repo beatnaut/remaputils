@@ -703,9 +703,10 @@ overwriteEvents <- function(ledge,res,joinC="id") {
   
   ledger <- ledger[,cnames] %>%
     dplyr::left_join(res,by=joinC) %>%
-    dplyr::mutate(pxFactor=if_else(is.na(quantity),1,as.numeric(quantity)))
+    dplyr::mutate(pxFactor=if_else(is.na(quantity),1,as.numeric(quantity))) %>%
+    dplyr::mutate(px=px*pxFactor)
     
-    
+
   return(list("ledger"=ledger))
 
 }
