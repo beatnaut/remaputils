@@ -4,10 +4,14 @@
 \alias{getStocksAndAssets}
 \title{flattens the pnl endpoint list data from decaf.}
 \usage{
-getStocksAndAssets(session)
+getStocksAndAssets(session, portfolio = NULL, date = Sys.Date())
 }
 \arguments{
 \item{session}{the decaf session.}
+
+\item{portfolio}{the decaf portfolio ID. Defaults to NULL.}
+
+\item{date}{the as of date. Defaults to present.}
 }
 \value{
 A flat df containing the session artifacts and associated asset class.

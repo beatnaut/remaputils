@@ -15,7 +15,8 @@ pnlReport(
   transfS = "transfer|investment",
   depoS = "DEPO",
   apiURL = "/apis/function/valuation-reports/eventsreport",
-  symbol = NULL
+  symbol = NULL,
+  extVal = TRUE
 )
 }
 \arguments{
@@ -40,6 +41,8 @@ pnlReport(
 \item{apiURL}{the npl endpoint API URL string.}
 
 \item{symbol}{string of the instrument symbol to debug. Defaults to NULL.}
+
+\item{extVal}{logical whether to overlay external valuation for performance. Defaults to FALSE - needs to be switched TODO.}
 }
 \value{
 A list containing the the granular ledger info  and a summarized one liner position data frame of pnl agg info corrected.
