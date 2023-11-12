@@ -638,7 +638,7 @@ flattenEvents <- function(grp) {
                   ,pxFactor=1
                   ,exclude=FALSE
                   ) %>%
-     dplyr::mutate(px=dplyr::if_else(is.na(px),as.numeric(pxlastRef),px))
+     dplyr::mutate(px=dplyr::if_else(is.na(px),as.numeric(pxlastRef),as.numeric(px)))
   
   
   if(NROW(ledger)==0) {
