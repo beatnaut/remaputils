@@ -1286,7 +1286,8 @@ contextEvents <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
 
     realized <- sum(fifo[fifo$sold,]$valRef-fifo[fifo$sold,]$cogs,na.rm=TRUE)
 
-    ledger[nrow(ledger),]$investment <- ledger[isStart,]$px * ledger[nrow(ledger),]$qty %>% safeNull()
+    ledger[nrow(ledger),]$investment <- ##TODO
+      dplyr::if_else(is.na(ledger[nrow(ledger),]$pxcostRef),as.numeric(ledger[isStart,]$px),as.numeric(ledger[nrow(ledger),]$pxcostRef)) * ledger[nrow(ledger),]$qty %>% safeNull()
       
     }
     
@@ -1317,6 +1318,10 @@ computeEvents <- function(context) {
   netValue <- replace_na(ledger[nrow(ledger),]$valNetRef,0)
 
   investment <- ledger[1,]$valNetRef + if_else(abs(ledger[ledger$tag=="opening",]$qty)>0,sum(ledger[(ledger$isInv&!ledger$isStart)|ledger$isCls,]$valRef*ledger[(ledger$isInv&!ledger$isStart)|ledger$isCls,]$sign,na.rm=TRUE),0) 
+
+  if(!is.na(ledger[NROW(ledger),]$investment)) {
+    investment <- ledger[NROW(ledger),]$investment
+  }
 
   unrealized <- netValue - investment
   
@@ -1362,6 +1367,11 @@ computeEvents <- function(context) {
   }
   
   totalReturn <- replace_na(realized,0) + replace_na(unrealized,0) + income + fees
+
+  # # print(paste(beautify(replace_na(netValue,0)),"net value"))
+  # # print(paste(beautify(replace_na(investment,0)),"investment"))
+  # # print(paste(beautify(replace_na(unrealized,0)),"unrealized"))
+  # # print(replace_na(unrealized,0)/investment)
 
   inv2 <- investment
   inv3 <- ledger[NROW(ledger),]$investmentOrg * if_else(ledger[1,]$type=="LOAN",-1,1)
