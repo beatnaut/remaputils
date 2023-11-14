@@ -1642,8 +1642,12 @@ pnlReport <- function(portfolio, since, until, currency, session, res, cashS="CC
                                                           "commitment__gte"=as.Date(since),
                                                           "commitment__lte"=as.Date(until),
                                                           "resmain__ctype"="CCY"
-                                                          ),session=session) %>%
+                                                          ),session=session) 
+                                                          
+       if(NROW(interest)>0) {
+        interest <- interest %>%
           dplyr::filter(tolower(stype) %in% c("payment of interest","interest paid or received")) 
+       }
           
         if(NROW(interest)>0) {
 
