@@ -1189,7 +1189,7 @@ contextEvents <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
   }
   
   realized <- 0
-
+  investment <- NULL
 
   if(any(ledger$isCls)) {
     
@@ -1286,11 +1286,28 @@ contextEvents <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
 
     realized <- sum(fifo[fifo$sold,]$valRef-fifo[fifo$sold,]$cogs,na.rm=TRUE)
 
-    ledger[nrow(ledger),]$investment <- ##TODO
-      dplyr::if_else(is.na(ledger[nrow(ledger),]$pxcostRef),as.numeric(ledger[isStart,]$px),as.numeric(ledger[nrow(ledger),]$pxcostRef)) * ledger[nrow(ledger),]$qty %>% safeNull()
+    investment <- sum(fifo[!fifo$sold,]$qty*fifo[!fifo$sold,]$px)
+
+    if(is.na(investment)) {
+      investment <- dplyr::if_else(is.na(ledger[nrow(ledger),]$pxcostRef),as.numeric(ledger[isStart,]$px),as.numeric(ledger[nrow(ledger),]$pxcostRef)) * ledger[nrow(ledger),]$qty %>% safeNull()
+
+    }
+
+    ledger[nrow(ledger),]$investment <- investment
       
     }
     
+  }
+
+  if(is.null(investment)) {
+    ##investment <- sum(ledger[ledger$isInv,]$valRef)
+    investment <- sum(ledger[ledger$isInv,]$qty*ledger[ledger$isInv,]$px)
+    if(is.na(investment)) {
+    investment <- sum(ledger[ledger$isInv,]$valRef)
+    }
+    if(!is.na(investment)) {
+      ledger[nrow(ledger),]$investment <- investment
+    }
   }
   
   ledger[1,]$valNetRef <- if_else(is.na(ledger[1,]$valNetRef),as.numeric(ledger[nrow(ledger),]$investment),as.numeric(ledger[1,]$valNetRef))
@@ -1329,7 +1346,7 @@ computeEvents <- function(context) {
   
   realized <- ledger[nrow(ledger),]$realized * if_else(ledger[1,]$type=="LOAN",-1,1)
   
-  ledger[NROW(ledger),]$pxcostRef <- if_else(is.na(ledger[1,]$pxlastRef),as.numeric(ledger[NROW(ledger),]$pxcostRef),as.numeric(ledger[1,]$pxlastRef))
+  ledger[NROW(ledger),]$pxcostRef <- if_else(is.na(ledger[1,]$pxlastRef),as.numeric(ledger[NROW(ledger),]$pxcostRef),as.numeric(ledger[1,]$pxlastRef)) ##TODO
   
   if(!is.na(ledger[NROW(ledger),]$pxcostRef)&ledger[NROW(ledger),]$pxcostRef>0&NROW(ledger[ledger$isInv,])==1&ledger[1,]$type!="LOAN") {
     investment <- (ledger[NROW(ledger),]$pxcostRef*ledger[NROW(ledger),]$qty*
@@ -1375,7 +1392,7 @@ computeEvents <- function(context) {
 
   inv2 <- investment
   inv3 <- ledger[NROW(ledger),]$investmentOrg * if_else(ledger[1,]$type=="LOAN",-1,1)
-  
+
   dat <- data.frame(
     startingNAV=safeNull(ledger[1,]$valRef)
   , startingNAVOrg=safeNull(ledger[1,]$valOrg)
@@ -1406,6 +1423,7 @@ computeEvents <- function(context) {
   , fees=safeNull(ledger[NROW(ledger),]$fees)
   , dubious=safeNull(ledger[NROW(ledger),]$dubious)
   , exclude=FALSE
+  , currency=safeNull(ledger[NROW(ledger),]$currency)
   ,stringsAsFactors = FALSE)
   
   
@@ -1619,7 +1637,29 @@ pnlReport <- function(portfolio, since, until, currency, session, res, cashS="CC
           dplyr::mutate(pctDerived=pctDerived/100/365 * prdDerived) %>%
           dplyr::mutate(intDerived=pctDerived*investment)
 
-        ## TODO... validate with actual trades data
+        interest <- getDBObject("trades",addParams=list(
+                                                          "accmain__portfolio"=portfolio,
+                                                          "commitment__gte"=as.Date(since),
+                                                          "commitment__lte"=as.Date(until),
+                                                          "resmain__ctype"="CCY"
+                                                          ),session=session) %>%
+          dplyr::filter(tolower(stype) %in% c("payment of interest","interest paid or received")) 
+          
+        if(NROW(interest)>0) {
+
+          interest <- interest %>%
+            dplyr::select(commitment,qtymain,resmain_symbol)
+
+          depo <- depo %>%
+            dplyr::group_by(symbol) %>%
+            dplyr::left_join(interest,by=c("endDerived"="commitment","currency"="resmain_symbol")) %>% 
+            dplyr::mutate(delta=abs(intDerived-qtymain)) %>%
+            dplyr::filter(delta==min(delta)) %>%
+            dplyr::ungroup() %>%
+            dplyr::mutate(intDerived=dplyr::if_else(is.na(qtymain),intDerived,qtymain)) %>%
+            dplyr::select(-qtymain,-delta)
+           
+        }
 
         # # depoTrades <- getDBObject("trades",addParams=list(
         # #                                                   "accmain__portfolio"=portfolio,
@@ -1648,7 +1688,8 @@ pnlReport <- function(portfolio, since, until, currency, session, res, cashS="CC
 
     }
     
-    
+    pnl[["aggSummary"]] <- pnl[["aggSummary"]] %>% dplyr::select(-currency)
+
     pnl$transfer <- transfer
     
     return(pnl)
@@ -1895,6 +1936,9 @@ pnlContribReport <- function(portfolio, date, session) {
 
         pos <- pos %>%
           dplyr::bind_rows(
+            data.frame(portfolio=unique(pos$portfolio),assetclass1="1) DECAF Notes",currency=curr,symbol="2) Discrepancy",name="2) Uncaptured Trade/PX Movements",total=-disc,performance=perf,stringsAsFactors=FALSE)
+          ) %>%
+          dplyr::bind_rows(
             data.frame(portfolio=unique(pos$portfolio),assetclass1="1) DECAF Notes",currency=curr,symbol="1) NTR Fees",name="1) Non-Trading Related Fees",total=cfees-disc,performance=perf,stringsAsFactors=FALSE) 
           ) %>%
           dplyr::arrange(assetclass1,assetclass2,assetclass3,name)
@@ -1910,7 +1954,7 @@ pnlContribReport <- function(portfolio, date, session) {
             dplyr::select(portfolio,name,symbol,currency,contains("assetclass"),open,value,`value(%)`,`pnl/inv`,unrealised,realised,income,fees,total,`total gross`,`total net`,contr,type) %>% 
             dplyr::select(-type)
 
-        bug <- pos[-1,] %>%
+        bug <- pos[-c(1,2),] %>%
           dplyr::filter(sign(contr)!=sign(total))
 
         if(NROW(bug)>0) {
@@ -1938,7 +1982,7 @@ pnlContribReport <- function(portfolio, date, session) {
     }
 
     indata <- itd %>% 
-        dplyr::filter(!is.na(symbol))
+        dplyr::filter(!is.na(symbol)) ##TODO
 
     if(NROW(indata)==0) {
       indata <- pnlS[["YTD"]] %>%
