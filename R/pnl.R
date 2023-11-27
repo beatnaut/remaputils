@@ -703,406 +703,11 @@ overwriteEvents <- function(ledge,res,joinC="id") {
   
   ledger <- ledger[,cnames] %>%
     dplyr::left_join(res,by=joinC) %>%
-    dplyr::mutate(pxFactor=if_else(is.na(quantity),1,as.numeric(quantity))) %>%
-    dplyr::mutate(px=px*pxFactor)
+    dplyr::mutate(pxFactor=dplyr::if_else(is.na(quantity),1,as.numeric(quantity))) %>%
+    dplyr::mutate(px=dplyr::if_else(is.na(valRef/qty),as.numeric(px*pxFactor),as.numeric((valRef/qty)))) ##Faulty pxFactors!!
     
-
   return(list("ledger"=ledger))
 
-}
-
-
-##' Contextualizes the flattened PnL data.
-##'
-##' This is the description
-##'
-##' @param flat the list containing clean data frame ledgers.
-##' @param excludedTags the tags to exclude from context in the ledger df.
-##' @return A list containing the contextualized ledger data frame and the original one.
-##' @export
-contextEvents_ <- function(flat,excludedTags=c("exclude","pnl")) {
-  
-  ledger <- flat$ledger %>% 
-    dplyr::filter(!tag %in% excludedTags) %>% 
-##  dplyr::filter(!tag %in% excludedTags,!(!is.na(quantType)&quantType=="position_change")) %>% 
-    dplyr::mutate(
-      valRef=if_else(type!="BOND"&!is.na(valQty),valQty*if_else(tag %in% c("opening","closing"),qty,abs(qty))*pxlastRef*sign(if_else(tag %in% c("opening","closing"),1,valRef)),valRef) ##for future trade contracts expressed in PNL
-      ,valOrg=if_else(type!="BOND"&!is.na(valQty),valQty*if_else(tag %in% c("opening","closing"),qty,abs(qty))*pxlastOrg*sign(if_else(tag %in% c("opening","closing"),1,valOrg)),valOrg)
-      ,fees=if_else(!is.na(quantType)&stringr::str_detect(quantType,"fee"),1,0)
-      ##,fees=if_else(!is.na(quantType)&str_detect(quantType,"fee")&type!="CCY",1,0)
-      ,income=if_else(fees==0&tag=="income",1,0)
-      ##,income=if_else(fees==0&tag=="income"&type!="CCY",1,0)
-    ) 
-  
-  isStart <- ledger[, "tag"] == "opening"
-  
-  isEnd   <- ledger[,"tag"] == "closing"
-  isInc   <- ledger[,"tag"] == "income"
-  ##isInc   <- ledger[,"income"] == 1
-  isFee   <- ledger[,"fees"] == 1
-  
-  isMrg   <- if_else(is.na(ledger[,"quantType"]),FALSE,stringr::str_detect(unlist(ledger[,"quantType"]),"split"))
-  
-  ledger[, "tqty"] <-cumsum(as.numeric(!isInc) * as.numeric(!isFee) * as.numeric(!isEnd) * ledger[,"qty"])
-  
-  ##isCls <- c(0, diff(abs(ledger[, "tqty"]))) < 0 ##should work for both short and long positions
-  isCls <- sign(ledger$qty)<0 & !isFee & !isInc & !isMrg &!isEnd
-  
-  ##isInv <- !isFee & !isInc & !isMrg &!isEnd
-  isInv <- sign(ledger$qty)>=0 & !isFee & !isInc & !isMrg &!isEnd
-  
-  if (ledger[isStart, "qty"] == 0) {
-    isStart[which(isInv)[2]] <- TRUE
-    isStart[1] <- FALSE
-    isInv[1] <- FALSE
-  }
-  
-  ledger[,"isStart"] <- isStart
-  
-  ledger[,"isEnd"] <- isEnd
-  
-  ledger[,"isCls"] <- isCls & !isMrg
-  
-  
-  if (ledger[isEnd, "qty"] == 0) {
-    ledger <- ledger %>% 
-      dplyr::mutate(isEnd=row_number()==max(if_else(isCls,row_number(),as.integer(0))))
-    isEnd <- ledger$isEnd
-  }
-  
-  ledger[,"isInv"] <- isInv & !isCls & !isEnd
-  
-  ledger$isInc <- isInc
-  
-  ledger$isFee <- isFee
-  
-  ledger <- ledger %>% 
-    dplyr::mutate(sign=if_else(tag %in% c("opening","closing")|isEnd,1,sign(qty))) %>% 
-    dplyr::mutate(
-      income=cumsum(if_else(income==1,sign*valRef,0)),
-      fees=cumsum(if_else(fees==1,sign*valRef,0)),
-      realized=as.numeric(NA)
-    )
-  
-  
-  dubious <- FALSE
-  
-  if(!all(is.na(ledger$px))) {
-    
-    if(min(ledger$px,na.rm=TRUE)>0) {  
-      
-      pxmin <- min(ledger$px,na.rm=TRUE)
-      pxmax <- max(ledger$px,na.rm=TRUE)
-
-# #       pxmin <- min(ledger[ledger$isInv|ledger$isCls,]$px,na.rm=TRUE)
-# #       pxmax <- max(ledger[ledger$isInv|ledger$isCls,]$px,na.rm=TRUE)
-      
-      dubious <- if_else(dubious==FALSE,pxmax/pxmin>2,dubious)
-      
-    }
-    
-  }
-  
-  realized <- 0
-  
-  
-  if(any(ledger$isCls)) {
-    
-    test <- ledger[1,]$pxcostRef*ledger[NROW(ledger),]$qty/ledger[nrow(ledger),]$investment
-    
-    if(!is.na(test)&abs(1-test)<.01) {
-      
-      cutoff <- min(ledger$date)  
-      
-      if(any(ledger$tqty==0)) {
-        cutoff <- max(ledger[which(ledger$tqty==0),]$date)
-      }
-      wac <- ledger %>% 
-        dplyr::filter(date>=cutoff,isInv) %>% 
-        dplyr::mutate(px=if_else(is.na(pxlastRef),as.numeric(px),as.numeric(pxlastRef))) %>% 
-        dplyr::mutate(px=px*qty/sum(qty)) %>% 
-        dplyr::summarise(px=sum(px)) %>% 
-        .[[1]]
-      
-      ledger[nrow(ledger),]$investment <- wac*ledger[nrow(ledger),]$qty
-    }
-    
-    
-    
-    realized <- ledger[nrow(ledger),]$investment +
-      sum(ledger[ledger$isCls,]$valRef) - ##add back sales
-      sum(ledger[ledger$isInv,]$valRef)  ##subtract buys
-    
-    
-    if(is.na(realized)|(!is.na(ledger[nrow(ledger),]$investment)&ledger[nrow(ledger),]$investment==0)) {
-      
-      ledger <- ledger %>% 
-        dplyr::mutate(across(c(valRef,valOrg), ~ if_else(round(px)==1&pxFactor==.01,as.numeric(.x/pxFactor),as.numeric(.x))))  %>% 
-        dplyr::mutate(bought=if_else(isInv,abs(qty),0),sold=if_else(isCls,abs(qty),0))
-      
-      if(any(isMrg)) {
-        
-        ledger <- ledger %>% 
-          dplyr::group_by(date) %>% 
-          dplyr::mutate(splitFactor=if_else(!is.na(quantType)&stringr::str_detect(quantType,"split"),
-                                            max(if_else(sign(qty)==-1,as.numeric(abs(qty)),1))/max(if_else(sign(qty)==1,as.numeric(abs(qty)),1)),
-                                            as.numeric(NA)
-          ),
-          splitFactor=if_else(row_number()==1|is.na(splitFactor),as.numeric(splitFactor),1)
-          ) %>% 
-          ungroup() %>% 
-          fill(splitFactor,.direction="down") %>% 
-          dplyr::mutate(splitFactor=cumprod(if_else(is.na(splitFactor),1,splitFactor)),splitFactor=if_else(is.na(splitFactor),1,splitFactor)) %>%
-          dplyr::mutate(
-            bought=bought*splitFactor,
-            sold=sold*splitFactor
-          )  %>% 
-          select(-splitFactor)
-        
-      }
-      
-      ledger <- ledger %>% 
-        dplyr::mutate(bought=cumsum(bought),sold=cumsum(sold))
-      
-      dubious <- if_else(!dubious,ledger[nrow(ledger),]$qty==0&ledger[nrow(ledger),]$sold!=ledger[nrow(ledger),]$bought,dubious)
-      
-      sales <- abs(sum(ledger[ledger$isCls,]$valRef,na.rm=TRUE))
-      
-      cost <- abs(sum(ledger[ledger$isInv,]$valRef,na.rm=TRUE))
-      
-      fctr <- ledger[nrow(ledger),]$bought/ledger[nrow(ledger),]$sold
-      
-      realized <- (fctr*sales) - cost
-      
-      ledger[nrow(ledger),]$investment <- cost
-      ledger[nrow(ledger),]$investmentOrg <- sum(ledger[ledger$isInv,]$valOrg,na.rm=TRUE)
-      
-      
-      ledger$bought <- NULL
-      ledger$sold <- NULL
-      
-    }
-    
-  }
-  
-  
-  ledger[1,]$valNetRef <- if_else(is.na(ledger[1,]$valNetRef),as.numeric(ledger[nrow(ledger),]$investment),as.numeric(ledger[1,]$valNetRef))
-  
-  ledger[nrow(ledger),]$realized <- realized
-  
-  ledger$dubious <- dubious
-  
-  return(list("ledger"=ledger,"ledgerOG"=flat$ledger))
-  
-}
-
-##' Contextualizes the flattened PnL data.
-##'
-##' This is the description
-##'
-##' @param flat the list containing clean data frame ledgers.
-##' @param excludedTags the tags to exclude from context in the ledger df.
-##' @param session the decaf session. Defaults to NULL TODO.
-##' @return A list containing the contextualized ledger data frame and the original one.
-##' @export
-contextEvents__ <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
-  
-  ledger <- flat$ledger %>% 
-    dplyr::filter(!tag %in% excludedTags) %>% 
-    dplyr::mutate(
-      valRef=if_else(type!="BOND"&!is.na(valQty),valQty*if_else(tag %in% c("opening","closing"),qty,abs(qty))*pxlastRef*sign(if_else(tag %in% c("opening","closing"),1,valRef)),valRef) ##for future trade contracts expressed in PNL
-      ,valOrg=if_else(type!="BOND"&!is.na(valQty),valQty*if_else(tag %in% c("opening","closing"),qty,abs(qty))*pxlastOrg*sign(if_else(tag %in% c("opening","closing"),1,valOrg)),valOrg)
-      ,fees=if_else(!is.na(quantType)&stringr::str_detect(quantType,"fee"),1,0)
-      ,income=if_else(fees==0&tag=="income",1,0)
-    ) 
-  
-  isStart <- ledger[, "tag"] == "opening"
-  
-  isEnd   <- ledger[,"tag"] == "closing"
-  isInc   <- ledger[,"tag"] == "income"
-  isFee   <- ledger[,"fees"] == 1
-  
-  isMrg   <- if_else(is.na(ledger[,"quantType"]),FALSE,stringr::str_detect(unlist(ledger[,"quantType"]),"split"))
-  
-  ledger[, "tqty"] <-cumsum(as.numeric(!isInc) * as.numeric(!isFee) * as.numeric(!isEnd) * ledger[,"qty"])
-  
-  isCls <- sign(ledger$qty)<0 & !isFee & !isInc & !isMrg &!isEnd
-
-  isInv <- sign(ledger$qty)>=0 & !isFee & !isInc & !isMrg &!isEnd
-  
-  if (ledger[isStart, "qty"] == 0) {
-    isStart[which(isInv)[2]] <- TRUE
-    isStart[1] <- FALSE
-    isInv[1] <- FALSE
-  }
-  
-  ledger[,"isStart"] <- isStart
-  
-  ledger[,"isEnd"] <- isEnd
-  
-  ledger[,"isCls"] <- isCls & !isMrg
-  
-  
-  if (ledger[isEnd, "qty"] == 0) {
-    ledger <- ledger %>% 
-      dplyr::mutate(isEnd=row_number()==max(if_else(isCls,row_number(),as.integer(0))))
-    isEnd <- ledger$isEnd
-  }
-  
-  ledger[,"isInv"] <- isInv & !isCls & !isEnd
-  
-  ledger$isInc <- isInc
-  
-  ledger$isFee <- isFee
-  
-  ledger <- ledger %>% 
-    dplyr::mutate(sign=if_else(tag %in% c("opening","closing")|isEnd,1,sign(qty))) %>% 
-    dplyr::mutate(
-      income=cumsum(if_else(income==1,sign*valRef,0)),
-      fees=cumsum(if_else(fees==1,sign*valRef,0)),
-      realized=as.numeric(NA)
-    )
-  
-  
-  dubious <- FALSE
-  
-  if(!all(is.na(ledger$px))) {
-    
-    if(min(ledger$px,na.rm=TRUE)>0) {  
-      
-      pxmin <- min(ledger$px,na.rm=TRUE)
-      pxmax <- max(ledger$px,na.rm=TRUE)
-      
-      dubious <- if_else(dubious==FALSE,pxmax/pxmin>2,dubious)
-      
-    }
-    
-  }
-  
-  realized <- 0
-
-
-  if(any(ledger$isCls)) {
-    
-    test <- ledger[1,]$pxcostRef*ledger[NROW(ledger),]$qty/ledger[nrow(ledger),]$investment
-    
-    if(!is.na(test)&abs(1-test)<.01) {
-      
-      cutoff <- min(ledger$date)  
-      
-      if(any(ledger$tqty==0)) {
-        cutoff <- max(ledger[which(ledger$tqty==0),]$date)
-      }
-      wac <- ledger %>% 
-        dplyr::filter(date>=cutoff,isInv) %>% 
-        dplyr::mutate(px=if_else(is.na(pxlastRef),as.numeric(px),as.numeric(pxlastRef))) %>% 
-        dplyr::mutate(px=px*qty/sum(qty)) %>% 
-        dplyr::summarise(px=sum(px)) %>% 
-        .[[1]]
-      
-      ledger[nrow(ledger),]$investment <- wac*ledger[nrow(ledger),]$qty
-    }
-    
-    
-    if(round(ledger[nrow(ledger),]$qty)==0) {
-      ledger[nrow(ledger),]$investment <- 0
-      if(unique(ledger$type)=="DEPO") {
-        ledger[nrow(ledger),]$investment <- ledger[ledger$qty>0,] %>% dplyr::filter(date==min(date)) %>% dplyr::select(valRef) %>% unique() %>% as.numeric()
-      }
-    }
-
-    realized <- ledger[nrow(ledger),]$investment +
-      sum(ledger[ledger$isCls,]$valRef) - ##add back sales
-      sum(ledger[ledger$isInv,]$valRef)  ##subtract buys
-
-    if(unique(ledger$type)=="DEPO") {realized <- 0}
-
-    if(!is.null(session)&ledger[nrow(ledger),]$type!="CCY"&abs(ledger[nrow(ledger),]$qty)>0&NROW(ledger[!ledger$isStart&ledger$isCls&!ledger$isEnd,])>0) {
-
-    ##instrument <- as.numeric(unique(ledger$id))
-    instrument <- unique(ledger$symbol)
-    dates      <- as.Date(ledger[!ledger$isStart&ledger$isCls&!ledger$isEnd,]$date) %>% unique() ##TODO
-
-    end   <- NULL
-    start <- NULL
-
-    ledge_ <- ledger %>%
-      dplyr::mutate(date=as.Date(date))
-
-    for(i in 1:length(dates)) {
-
-      e <- dates[i]
-      s <- ledge_ %>%
-        dplyr::filter(date < e) %>%
-        dplyr::filter(date==min(date)) %>%
-        dplyr::select(date) %>%
-        .[[1]]
-
-      if(length(s)==0) {
-      s <- start[1]  ##workaround TODO
-      }
-
-      start <- c(start,s)
-      end   <- c(end,e)
-
-      ledge_ <- ledge_ %>%
-        dplyr::filter(date > e)
-      
-    }
-
-    start <- as.Date(start)
-    end   <- as.Date(end)
-
-    params <- list(
-      "format"="csv",
-      "page_size"=1,
-      "series__symbol"=instrument
-    )
-
-    realised <- sapply(
-      1:length(end), function(x) {
-
-        start_ <- start[x]
-        end_   <- end[x]
-
-        params[["date__lte"]] <- start_
-
-        if(is.na(start_)) {print("Date Issue in FIFO computation!!")}
-
-        pxBuy <- as.data.frame(getResource("ohlcobservations", params=params, session=session))$close %>% safeNull()
-        qtySld <- abs(ledger[ledger$date==end_,]$qty) %>% safeNull()
-        value <- abs(ledger[ledger$date==end_,]$valRef) %>% safeNull()
-
-        value - (qtySld * pxBuy)
-
-
-      }
-    )
-
-
-    realized <- sum(realised,na.rm=TRUE)
-
-    params[["date__lte"]] <- start[1]
-    pxInv <- as.data.frame(getResource("ohlcobservations", params=params, session=session))$close %>% safeNull()
-
-    ledger[nrow(ledger),]$investment <- pxInv * ledger[nrow(ledger),]$qty %>% safeNull()
-      
-      # # ledger[nrow(ledger),]$investment <- cost
-      # # ledger[nrow(ledger),]$investmentOrg <- sum(ledger[ledger$isInv,]$valOrg,na.rm=TRUE)
-      
-    }
-    
-  }
-  
-  
-  ledger[1,]$valNetRef <- if_else(is.na(ledger[1,]$valNetRef),as.numeric(ledger[nrow(ledger),]$investment),as.numeric(ledger[1,]$valNetRef))
-  
-  ledger[nrow(ledger),]$realized <- realized
-  
-  ledger$dubious <- dubious
-  
-  return(list("ledger"=ledger,"ledgerOG"=flat$ledger))
-  
 }
 
 ##' Contextualizes the flattened PnL data.
@@ -1300,6 +905,7 @@ contextEvents <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
   }
 
   if(is.null(investment)) {
+##    browser()
     ##investment <- sum(ledger[ledger$isInv,]$valRef)
     investment <- sum(ledger[ledger$isInv,]$qty*ledger[ledger$isInv,]$px)
     if(is.na(investment)) {
@@ -1310,7 +916,7 @@ contextEvents <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
     }
   }
   
-  ledger[1,]$valNetRef <- if_else(is.na(ledger[1,]$valNetRef),as.numeric(ledger[nrow(ledger),]$investment),as.numeric(ledger[1,]$valNetRef))
+  ##ledger[1,]$valNetRef <- if_else(is.na(ledger[1,]$valNetRef),as.numeric(ledger[nrow(ledger),]$investment),as.numeric(ledger[1,]$valNetRef))
   
   ledger[nrow(ledger),]$realized <- realized
   
@@ -1331,14 +937,15 @@ contextEvents <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
 computeEvents <- function(context) {
   
   ledger <- context$ledger 
-  
-  netValue <- replace_na(ledger[nrow(ledger),]$valNetRef,0)
 
-  investment <- ledger[1,]$valNetRef + if_else(abs(ledger[ledger$tag=="opening",]$qty)>0,sum(ledger[(ledger$isInv&!ledger$isStart)|ledger$isCls,]$valRef*ledger[(ledger$isInv&!ledger$isStart)|ledger$isCls,]$sign,na.rm=TRUE),0) 
+  ##netValue <- replace_na(ledger[nrow(ledger),]$valNetRef,0)
+  netValue <- ledger[NROW(ledger),]$valRef
 
-  if(!is.na(ledger[NROW(ledger),]$investment)) {
-    investment <- ledger[NROW(ledger),]$investment
-  }
+  ##investment <- ledger[1,]$valNetRef + if_else(abs(ledger[ledger$tag=="opening",]$qty)>0,sum(ledger[(ledger$isInv&!ledger$isStart)|ledger$isCls,]$valRef*ledger[(ledger$isInv&!ledger$isStart)|ledger$isCls,]$sign,na.rm=TRUE),0) 
+  # # if(!is.na(ledger[NROW(ledger),]$investment)) {
+  # #   investment <- ledger[NROW(ledger),]$investment
+  # # }
+  investment <- ledger[NROW(ledger),]$investment
 
   unrealized <- netValue - investment
   
@@ -1359,8 +966,13 @@ computeEvents <- function(context) {
     unrealized <- context$ledgerOG[NROW(context$ledgerOG),]$valRef
   }
   
-  if(ledger[1,]$type=="DEPO"&abs(ledger[NROW(ledger),]$qty)>0&!is.na(context$ledgerOG[NROW(context$ledgerOG),]$investment)) {
-    unrealized <- context$ledgerOG[NROW(context$ledgerOG),]$valRef-context$ledgerOG[NROW(context$ledgerOG),]$investment
+  # # if(ledger[1,]$type=="DEPO"&abs(ledger[NROW(ledger),]$qty)>0&!is.na(context$ledgerOG[NROW(context$ledgerOG),]$investment)) {
+  # #   unrealized <- context$ledgerOG[NROW(context$ledgerOG),]$valRef-context$ledgerOG[NROW(context$ledgerOG),]$investment
+  # # }
+
+  if(ledger[1,]$type=="DEPO") {
+    unrealized <- 0
+    realized   <- 0
   }
   
   income <- ledger[nrow(ledger),]$income
@@ -1754,7 +1366,7 @@ compilePnlReport <- function(portfolio, until=Sys.Date(), session, symbol=NULL,y
                 navBrs <- rdecaf::getResource("fundreport", params=list("fund"=portfolio, ccy=currency, date=seqD[[x]], type="commitment"), session=session)$nav
                 pnlRs <- pnlReport(portfolio=portfolio,since=seqD[[x]],until=until,currency=currency,session=session,res=res,symbol=symbol)
                 
-                cFees <- getDBObject("trades",addParams=list("accmain__portfolio"=portfolio,"remarks__icontains"="custody fee","resmain__ctype"="CCY","commitment__gte"=seqD[[x]],"commitment__lte"=until),session=session) 
+                cFees <- getDBObject("trades",addParams=list("accmain__portfolio"=portfolio,"remarks__icontains"="custody fee","resmain__ctype"="CCY","commitment__gte"=seqD[[x]],"commitment__lte"=until),session=session)
 
             if (NROW(cFees) == 0) {
                 cFees <- data.frame("commitment"=seqD[[x]],
@@ -1882,7 +1494,7 @@ selPnlContrCols <- function(df,
 ##' @return A data frame of the relative period pnls in a consolidated contribution report.
 ##' @export
 pnlContribReport <- function(portfolio, date, session) {
-    
+
     PnL <- compilePnlReport(portfolio=portfolio, until=date, session=session)
     
     if(is.null(PnL)) {
@@ -1925,8 +1537,12 @@ pnlContribReport <- function(portfolio, date, session) {
         disc <- (totalPnl + cfees) - totalPnlNet
 
         print(noquote(""))
+        print(portfolio)
+        print(date)
         print(names(PnL$nav)[[x]])
         print(noquote(""))
+
+        if(abs(disc/navEnd) > .01) { 
 
         print(paste(curr,beautify(totalPnlNet),"= Beg NAV - (End NAV + Net Transfer) = Net PnL."))
         print(paste(curr,beautify(navBeg),"= Beginning Value (NAV)."))
@@ -1938,14 +1554,22 @@ pnlContribReport <- function(portfolio, date, session) {
 
         print(noquote(""))
 
+        }
+
         pos <- pos %>%
           dplyr::bind_rows(
             data.frame(portfolio=unique(pos$portfolio),assetclass1="1) DECAF Notes",currency=curr,symbol="2) Discrepancy",name="2) Uncaptured Trade/PX Movements",total=-disc,performance=perf,stringsAsFactors=FALSE)
           ) %>%
           dplyr::bind_rows(
-            data.frame(portfolio=unique(pos$portfolio),assetclass1="1) DECAF Notes",currency=curr,symbol="1) NTR Fees",name="1) Non-Trading Related Fees",total=cfees-disc,performance=perf,stringsAsFactors=FALSE) 
+            data.frame(portfolio=unique(pos$portfolio),assetclass1="1) DECAF Notes",currency=curr,symbol="1) NTR Fees",name="1) Non-Trading Related Fees",total=cfees,performance=perf,stringsAsFactors=FALSE) 
           ) %>%
           dplyr::arrange(assetclass1,assetclass2,assetclass3,name)
+          
+
+        if(sign(totalPnlNet)!=sign(perf)&round(totalPnlNet/navEnd,2)==0) {
+          print("0 performance sign override applied!")
+          totalPnlNet <- abs(totalPnlNet) * sign(perf)
+        }
 
         pos <- pos %>%
           dplyr::mutate(pnlRatio = total/totalPnlNet) %>%
@@ -1954,11 +1578,12 @@ pnlContribReport <- function(portfolio, date, session) {
 
         pos  <- pos %>%
             dplyr::mutate(contr=pnlRatio*performance) %>%
+            dplyr::mutate(`total net`=totalPnlNet) %>% ##TODO
             dplyr::select(-assetClass) %>% 
             dplyr::select(portfolio,name,symbol,currency,contains("assetclass"),open,value,`value(%)`,`pnl/inv`,unrealised,realised,income,fees,total,`total gross`,`total net`,contr,type) %>% 
             dplyr::select(-type)
 
-        bug <- pos[-c(1,2),] %>%
+        bug <- pos[-c(1:2),] %>%
           dplyr::filter(sign(contr)!=sign(total))
 
         if(NROW(bug)>0) {
@@ -1971,7 +1596,7 @@ pnlContribReport <- function(portfolio, date, session) {
         colnames(pos) <- c(colnames(pos[,1:(length(pos)-9)]),addNames)
 
         pos$quantity <- notional
-        
+
         return(pos)
       
     }
@@ -1982,7 +1607,7 @@ pnlContribReport <- function(portfolio, date, session) {
     
     itd <- pnlS[["ITD"]]
     if(is.null(itd)) {
-    itd <-initDF(c("portfolio","name","isin","symbol","currency","smbc_class","assetclass","assetclass1","assetclass2","assetclass3","open","quantity","value","value(%)",paste0(c("pnl/inv","unrealised","realised","income","fees","total","total gross","total net","contr"),"(itd)"))) 
+    itd <-initDF(c("portfolio","name","isin","symbol","currency","assetclass","assetclass1","assetclass2","assetclass3","open","quantity","value","value(%)",paste0(c("pnl/inv","unrealised","realised","income","fees","total","total gross","total net","contr"),"(itd)"))) 
     }
 
     indata <- itd %>% 
@@ -1990,7 +1615,7 @@ pnlContribReport <- function(portfolio, date, session) {
 
     if(NROW(indata)==0) {
       indata <- pnlS[["YTD"]] %>%
-        dplyr::select(c("portfolio","name","symbol","currency","assetclass","assetclass1","assetclass2","assetclass3","open","quantity","value","value(%)"))
+        dplyr::select(c("portfolio","name","isin","symbol","currency","assetclass","assetclass1","assetclass2","assetclass3","open","quantity","value","value(%)"))
         
     }
 
@@ -2045,27 +1670,7 @@ pnlContribReport <- function(portfolio, date, session) {
 
     indata <- indata %>% 
         dplyr::distinct() 
- 
-    ## Get the resources:
-    resources <- safeRbind(lapply(indata[, "symbol"], function(x) getDBObject("resources", session, addParams=list("symbol"=x))), convertToString=TRUE)
     
-    ## Add the smbc classifciation:
-    smbcClass <- resources[match(indata[, "symbol"], resources[, "symbol"], incomparables=NA), "attributes.smbc_classification"]
-    Isin <- resources[match(indata[, "symbol"], resources[, "symbol"], incomparables=NA), "isin"] ##TO DO .. this takes super long
-    
-    indata$isin <- safeNull(Isin)
-    indata$smbc_class <- safeNull(smbcClass)
-  
-    indata <- bind_cols(indata[,c("portfolio","name","isin","symbol","currency","smbc_class","assetclass","assetclass1","assetclass2","assetclass3","open","value","value(%)")],
-                        indata %>% select(contains("itd")),
-                        indata %>% select(contains("ytd")),
-                        indata %>% select(contains("qtd")),
-                        indata %>% select(contains("mtd")),
-                        indata %>% select(contains("wtd")),
-                        indata %>% select(contains("dtd")),
-                        indata %>% select(quantity)
-    )
-                        
     return(indata)
     
 }
