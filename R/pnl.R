@@ -730,7 +730,32 @@ contextEvents <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
       ,income=if_else(fees==0&tag=="income",1,0)
     ) 
   
+  ## Test for shorts! ##
+  # # add <- ledger[2,] %>%
+  # #   dplyr::mutate(px=17,qty=5000,valRef=qty*px)
+
+  # # t <- ledger[1:2,] %>%
+  # #   dplyr::bind_rows(add) %>%
+  # #   dplyr::bind_rows(ledger[3,] %>% dplyr::mutate(qty=-5000,valRef=px*qty))
+
+  # # ledger <- t
+  
   isStart <- ledger[, "tag"] == "opening"
+
+  if(ledger[isStart, "qty"] == 0) {
+    rowN <- ledger %>%
+      dplyr::mutate(rowKey=row_number()) %>%
+      dplyr::filter(abs(qty)>0,tag=="stock") %>%
+      dplyr::slice(1:1) %>%
+      dplyr::select(rowKey) %>%
+      unlist()
+    if(length(rowN) > 0) {
+    isStart <- rep(FALSE,NROW(ledger))
+    isStart[rowN] <- TRUE
+    }
+  }
+
+  signStart <- sign(ledger[isStart,]$qty) ##Get the starting direction of trade
   
   isEnd   <- ledger[,"tag"] == "closing"
   isInc   <- ledger[,"tag"] == "income"
@@ -740,22 +765,24 @@ contextEvents <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
   
   ledger[, "tqty"] <-cumsum(as.numeric(!isInc) * as.numeric(!isFee) * as.numeric(!isEnd) * ledger[,"qty"])
   
-  isCls <- sign(ledger$qty)<0 & !isFee & !isInc & !isMrg &!isEnd
+  # # if (ledger[isStart, "qty"] == 0) {
+  # #   isStart[which(isInv)[2]] <- TRUE
+  # #   isStart[1] <- FALSE
+  # #   isInv[1] <- FALSE
+  # # }
 
-  isInv <- sign(ledger$qty)>=0 & !isFee & !isInc & !isMrg &!isEnd
-  
-  if (ledger[isStart, "qty"] == 0) {
-    isStart[which(isInv)[2]] <- TRUE
-    isStart[1] <- FALSE
-    isInv[1] <- FALSE
-  }
+  trds <- !isFee & !isInc & !isMrg &!isEnd
+  ##isCls <- sign(ledger$qty)<0
+  isCls <- trds & sign(ledger$qty)==-1*signStart ##accounts for short positions
+  ##isInv <- sign(ledger$qty)>=0
+  isInv <- trds & sign(ledger$qty)==signStart
   
   ledger[,"isStart"] <- isStart
   
   ledger[,"isEnd"] <- isEnd
   
   ledger[,"isCls"] <- isCls & !isMrg
-  
+
   
   if (ledger[isEnd, "qty"] == 0) {
     ledger <- ledger %>% 
@@ -831,7 +858,10 @@ contextEvents <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
 
     if(unique(ledger$type)=="DEPO") {realized <- 0}
 
-    if(!is.null(session)&ledger[nrow(ledger),]$type!="CCY"&abs(ledger[nrow(ledger),]$qty)>0&NROW(ledger[!ledger$isStart&ledger$isCls&!ledger$isEnd,])>0) {
+    if(ledger[nrow(ledger),]$type!="CCY"&  ##exclude cash
+       abs(ledger[nrow(ledger),]$qty)>0&NROW(ledger[!ledger$isStart & ledger$isCls & !ledger$isEnd,])>0
+       ##make sure position is still open ^
+      ) {
 
     buyNsell <- ledger %>%
       dplyr::filter(!isEnd,isInv|isCls) %>% 
@@ -861,20 +891,33 @@ contextEvents <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
 
       ##if(is.na(qty)) {browser()}
 
-      while(qty>0) {
+      while(abs(qty)>0 & NROW(cogs)>0) {
 
       for (j in 1:NROW(cogs)) {
 
         invntry <- cogs[j,]$qty
         pxBuy <- cogs[j,]$px
-        invntryUsed <- min(qty,invntry)
+        invntryUsed <- min(abs(qty),abs(invntry)) * sign(invntry)
 
         valSold <- valSold + invntryUsed * pxBuy
-        invntry <- max(0,invntry-invntryUsed,na.rm=TRUE)
+        
+        if(signStart==-1) { ##accounts for short positions
+        invntry <- min(invntry-invntryUsed,0,na.rm=TRUE)
+        }
+        if(signStart==1) {
+        invntry <- max(invntry-invntryUsed,0,na.rm=TRUE)
+        }
 
         cogs[j,]$qty <- invntry
 
+        if(signStart==-1) {
+        qty <- min(0,qty-invntryUsed,na.rm=TRUE)
+        }
+        if(signStart==1) {
         qty <- max(0,qty-invntryUsed,na.rm=TRUE)
+        }
+
+        ##qty <- max(0,qty-invntryUsed,na.rm=TRUE)
 
         if(j==NROW(cogs)) {qty <- 0} ##avoid infinite loop
 
@@ -898,26 +941,27 @@ contextEvents <- function(flat,excludedTags=c("exclude","pnl"), session=NULL) {
 
     }
 
-    ledger[nrow(ledger),]$investment <- investment
+    ##ledger[nrow(ledger),]$investment <- investment
       
     }
     
   }
 
+
   if(is.null(investment)) {
-##    browser()
+
     ##investment <- sum(ledger[ledger$isInv,]$valRef)
     investment <- sum(ledger[ledger$isInv,]$qty*ledger[ledger$isInv,]$px)
     if(is.na(investment)) {
     investment <- sum(ledger[ledger$isInv,]$valRef)
     }
-    if(!is.na(investment)) {
-      ledger[nrow(ledger),]$investment <- investment
-    }
+
   }
-  
-  ##ledger[1,]$valNetRef <- if_else(is.na(ledger[1,]$valNetRef),as.numeric(ledger[nrow(ledger),]$investment),as.numeric(ledger[1,]$valNetRef))
-  
+
+  investment <- investment * signStart ##accounts for short positions
+  ledger[nrow(ledger),]$investment <- investment
+
+  realized <- realized * signStart
   ledger[nrow(ledger),]$realized <- realized
   
   ledger$dubious <- dubious
@@ -948,7 +992,7 @@ computeEvents <- function(context) {
   investment <- ledger[NROW(ledger),]$investment
 
   unrealized <- netValue - investment
-  
+
   investment <- investment * if_else(ledger[1,]$type=="LOAN",-1,1)
   
   realized <- ledger[nrow(ledger),]$realized * if_else(ledger[1,]$type=="LOAN",-1,1)
@@ -1128,7 +1172,7 @@ wrapEvents <- function(pnlst,res,session=NULL) {
 
   ## Compute the PnL
   cc <- lapply(bb, function(grp) computeEvents(grp))
-  
+
   
   ##aggregate summaries portfolio level
   dat <- data.frame() %>% 
