@@ -342,3 +342,12 @@ getOHLCSeriesForStocks <- function(container, containerType, asof, resources, se
     ohlcs
 
 }
+
+getLatestPx <- function(ohlc,date=Sys.Date(),session) {
+
+    params <- list("format"="csv",fields="symbol,date,close","page_size"=1,"series__symbol"=ohlc,"date__lte"=date)
+    pxObs <- getResource("ohlcobservations", params=params, session=session)
+    NROW(pxObs) > 0 || return(as.numeric(NA))
+    return(pxObs$close)
+
+}
