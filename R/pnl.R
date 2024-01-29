@@ -1534,7 +1534,6 @@ selPnlContrCols <- function(df,
 ##' @param portfolio the decaf portfolio id.
 ##' @param date the end date for the pnl relative period calculation via compilepnlreport.
 ##' @param session the decaf session.
-##' @param symbol string of the instrument symbol to debug. Defaults to NULL.
 ##' @return A data frame of the relative period pnls in a consolidated contribution report.
 ##' @export
 pnlContribReport <- function(portfolio, date, session) {
