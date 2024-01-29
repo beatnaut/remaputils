@@ -343,6 +343,15 @@ getOHLCSeriesForStocks <- function(container, containerType, asof, resources, se
 
 }
 
+##' This function returns the last px for an ohlc code as of a given date.
+##'
+##' This is a description
+##'
+##' @param ohlc string of the ohlc code to query for in the ohlcobservations endpoint.
+##' @param date date of the as-of/up-to date to query. Defaults to current day.
+##' @param session list of the rdecaf session.
+##' @return numeric of the most recent PX.
+##' @export
 getLatestPx <- function(ohlc,date=Sys.Date(),session) {
 
     params <- list("format"="csv",fields="symbol,date,close","page_size"=1,"series__symbol"=ohlc,"date__lte"=date)

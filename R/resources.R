@@ -1352,7 +1352,7 @@ findUnderlying <- function(resources,
 
 
 
-##' A function to compare px on option contract strike and its underlying security price to alert users beyond a threshold.
+##' A function to query decaf resources endpoint for a specific attribute.
 ##'
 ##' This is a description.
 ##'
@@ -1360,8 +1360,7 @@ findUnderlying <- function(resources,
 ##' @param type string of the ctype to filter for, defaults to options.
 ##' @param date date of the as-of/up-to date to query active and unexpired instruments. Defaults to current day.
 ##' @param attr string of the attributes column identifying the underlying. Defaults to ohlc_underlying.
-##' @param thresh numeric threshold setting the limit of the px convergence to trigger an email alert for. Defaults to 10%.
-##' @return The data-frame with identified underlying instruments of options and relevant info.
+##' @return The resources data-frame filtered.
 ##' @export
 getResUndrAttr <- function(session,type="OPT",date=Sys.Date(),attr="attributes.ohlc_underlying") {
 
@@ -1379,6 +1378,14 @@ getResUndrAttr <- function(session,type="OPT",date=Sys.Date(),attr="attributes.o
 
 }
 
+##' A function to derive the option details from the resources data frame returned in the function above, specifically with the ohlc underlying attribute.
+##'
+##' This is a description.
+##'
+##' @param session list of the rdecaf session.
+##' @param date date of the as-of/up-to date to query active and unexpired instruments. Defaults to current day.
+##' @return The data-frame with identified underlying instruments of options and relevant info, including account details.
+##' @export
 getOptionsFromRes <- function(session,date=Sys.Date()) {
 
   ## Get the instruments with underlying ohlc defined
@@ -1449,6 +1456,14 @@ getOptionsFromRes <- function(session,date=Sys.Date()) {
 
 }
 
+##' A function to clean up the options df returned from the function above.
+##'
+##' This is a description.
+##'
+##' @param session list of the rdecaf session.
+##' @param date date of the as-of/up-to date to query active and unexpired instruments. Defaults to current day.
+##' @return The data-frame with identified underlying instruments of options and relevant info, cleaned up for export.
+##' @export
 getOptionsData <- function(session,date=Sys.Date()) {
  
     optionsDat <- getOptionsFromRes(session=session,date=date) 
@@ -1472,7 +1487,24 @@ getOptionsData <- function(session,date=Sys.Date()) {
 
 }
 
-optionsAlert <- function(data,portfolios=NULL,title="Options Alert",from="info@telostat.com",emails=list("andre@telostat.com"),thresh=.1) {
+##' A function to taking a list of emails and portfolios, creating an options alert with content derived from given data.
+##'
+##' This is a description.
+##'
+##' @param data dataframe, such as the output from function above, containing at a minimum porfolio_name and delta columns.
+##' @param portfolios list of portfolio names to filter for in the data, where applicable. Defaults to null.
+##' @param title string for the message body of the email alert. Defaulst to options alert.
+##' @param from string for the sender email address. Defaults to telostat.
+##' @param emails list of email strings for the recipient email addresses. Defaults to andre.
+##' @param thresh numeric threshold setting the limit of the px convergence filter for delta to trigger an email alert for. Defaults to 0.1.
+##' @return null with a printed message confirming send.
+##' @export
+optionsAlert <- function(data
+                        ,portfolios=NULL
+                        ,title="Options Alert"
+                        ,from="info@telostat.com"
+                        ,emails=list("andre@telostat.com")
+                        ,thresh=.1) {
   
   if(!is.null(portfolios)) {
     portfolios <- unlist(portfolios)
@@ -1503,7 +1535,7 @@ optionsAlert <- function(data,portfolios=NULL,title="Options Alert",from="info@t
 ##' @param type string of the ctype to filter for, defaults to options.
 ##' @param date date of the as-of/up-to date to query active and unexpired instruments. Defaults to current day.
 ##' @param attr string of the attributes column identifying the underlying. Defaults to ohlc_underlying.
-##' @param thresh numeric threshold setting the limit of the px convergence to trigger an email alert for. Defaults to 10%.
+##' @param thresh numeric threshold setting the limit of the px convergence to trigger an email alert for. Defaults to 0.1
 ##' @return The data-frame with identified underlying instruments of options and relevant info.
 ##' @export
 getUnderlyingOptions <- function(session,type="OPT",date=Sys.Date(),attr="attributes.ohlc_underlying",thresh=.1) {
@@ -1598,48 +1630,48 @@ getUnderlyingOptions <- function(session,type="OPT",date=Sys.Date(),attr="attrib
 
     ## TODO
 
-    ## Generate the plot data - to be run BEFORE options is filtered by thresh!!!
-    ploptions <- options %>%
-    dplyr::group_by(id) %>%
-    dplyr::filter(row_number()==1) %>%
-    dplyr::ungroup() %>%
-    dplyr::select(id,contract,symbol,ohlcUnderlying,commitment,expiry,strike,Underlying)
+    # # ## Generate the plot data - to be run BEFORE options is filtered by thresh!!!
+    # # ploptions <- options %>%
+    # # dplyr::group_by(id) %>%
+    # # dplyr::filter(row_number()==1) %>%
+    # # dplyr::ungroup() %>%
+    # # dplyr::select(id,contract,symbol,ohlcUnderlying,commitment,expiry,strike,Underlying)
 
-    ploptionz <- data.frame() %>%
-    dplyr::bind_rows(
-        lapply(1:NROW(ploptions), function(x) {
-            obs <- getOhlcObsForSymbol(session=session,symbol=ploptions[x,]$ohlcUnderlying,lte=ploptions[x,]$expiry,
-            lookBack=as.numeric(ploptions[x,]$expiry-ploptions[x,]$commitment)
-            ) %>%
-            dplyr::select(symbol,date,close) 
-        })
-    ) %>%
-    dplyr::rename(ohlcUnderlying=symbol) %>%
-    dplyr::distinct()
+    # # ploptionz <- data.frame() %>%
+    # # dplyr::bind_rows(
+    # #     lapply(1:NROW(ploptions), function(x) {
+    # #         obs <- getOhlcObsForSymbol(session=session,symbol=ploptions[x,]$ohlcUnderlying,lte=ploptions[x,]$expiry,
+    # #         lookBack=as.numeric(ploptions[x,]$expiry-ploptions[x,]$commitment)
+    # #         ) %>%
+    # #         dplyr::select(symbol,date,close) 
+    # #     })
+    # # ) %>%
+    # # dplyr::rename(ohlcUnderlying=symbol) %>%
+    # # dplyr::distinct()
 
-    ploptionz <- ploptionz %>%
-    dplyr::inner_join(ploptions,by="ohlcUnderlying") %>%
-    dplyr::mutate(px=close/strike,issue=date==commitment,exercise=date==expiry,period=-1*as.numeric(expiry-date)) %>%
-    dplyr::group_by(symbol) %>%
-    dplyr::arrange(date) %>%
-    as.data.frame()
+    # # ploptionz <- ploptionz %>%
+    # # dplyr::inner_join(ploptions,by="ohlcUnderlying") %>%
+    # # dplyr::mutate(px=close/strike,issue=date==commitment,exercise=date==expiry,period=-1*as.numeric(expiry-date)) %>%
+    # # dplyr::group_by(symbol) %>%
+    # # dplyr::arrange(date) %>%
+    # # as.data.frame()
 
-    gplot <- ggplot(data=ploptionz, aes(x=period,y=px, label = beautify(round(close)))) +
-    geom_point(aes(shape=Underlying)) +
-    geom_text(aes(color=contract),check_overlap = TRUE,angle = 45,hjust=1) +
-    geom_line(aes(linetype=symbol)) +
-    ##facet_wrap(~contract) +
-    theme_classic() + 
-    scale_x_continuous(breaks=ploptionz$period,limits = c(floor(1.1*min(ploptionz$period)), min(0,ceiling(.9*max(ploptionz$period))))) +
-    scale_y_continuous(labels = scales::percent) +
-    labs(title="Active Option Contract(s): Underlying Price Evolution"
-        ,x="Day(s) to Expiration"
-        ,y="Delta PX (%Strike)"
-        ,color='Option Type'
-        ,linetype="Option Contract"
-        ,shape="Underlying Security") +
-    geom_vline(xintercept=ploptionz[ploptionz$issue,]$period,linetype = "dotted") +
-    geom_vline(xintercept=ploptionz[ploptionz$exercise,]$period,linetype = "dashed") +
-    geom_hline(yintercept=1,linetype="twodash",color="red")
+    # # gplot <- ggplot(data=ploptionz, aes(x=period,y=px, label = beautify(round(close)))) +
+    # # geom_point(aes(shape=Underlying)) +
+    # # geom_text(aes(color=contract),check_overlap = TRUE,angle = 45,hjust=1) +
+    # # geom_line(aes(linetype=symbol)) +
+    # # ##facet_wrap(~contract) +
+    # # theme_classic() + 
+    # # scale_x_continuous(breaks=ploptionz$period,limits = c(floor(1.1*min(ploptionz$period)), min(0,ceiling(.9*max(ploptionz$period))))) +
+    # # scale_y_continuous(labels = scales::percent) +
+    # # labs(title="Active Option Contract(s): Underlying Price Evolution"
+    # #     ,x="Day(s) to Expiration"
+    # #     ,y="Delta PX (%Strike)"
+    # #     ,color='Option Type'
+    # #     ,linetype="Option Contract"
+    # #     ,shape="Underlying Security") +
+    # # geom_vline(xintercept=ploptionz[ploptionz$issue,]$period,linetype = "dotted") +
+    # # geom_vline(xintercept=ploptionz[ploptionz$exercise,]$period,linetype = "dashed") +
+    # # geom_hline(yintercept=1,linetype="twodash",color="red")
 
 }
