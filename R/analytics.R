@@ -3,6 +3,81 @@
 ##' @param accounts The account mapping list.
 ##' @param type The type of container. Either 'accounts' or 'portfolios'.
 ##' @param ccy The currency to be valued.
+##' @return A data frame with the NAv comparisons.
+##' @export
+##'
+weightedPriceSeries <- function(meta, session, push=FALSE) {
+
+    ## Get the ohlc series of the constituents as data frame:
+    ohlcs <- lapply(meta[["weights"]], function(x) {
+
+        ## Get the ohlc series:
+        ohlc <- getOhlcObsForSymbol(x[["symbol"]], session=session, lookBack=NULL)
+
+        ## If no ohlc, return NULL:
+        NROW(ohlc) > 1 || return(NULL)
+
+        ## Return as xts:
+        xts::as.xts(ohlc[, "close"], as.Date(ohlc[, "date"]))
+    })
+
+    ## Infer missing data:
+    missingData <- do.call(c, sapply(1:length(meta[["weights"]]), function(i) {
+        !is.null(ohlcs[[i]]) || return(meta$weights[[i]]$symbol)
+        return(NULL)
+    }))
+
+    ##:
+    is.null(missingData) || return(sprintf("%s: Missing constituent ohlc (%s)", meta$ohlccode, paste(missingData, collapse=", ")))
+
+    ## Bind the ohlc list:
+    ohlcs <- do.call(cbind, ohlcs)
+
+    ## Name the columns:
+    colnames(ohlcs) <- sapply(meta[["weights"]], function(x) x$symbol)
+
+    ## Get the weights:
+    weights <- sapply(meta[["weights"]], function(x) x$value)
+
+    ## Construct the indexed price series:
+    indexedPrice <- xts::as.xts(apply(na.omit(ohlcs), MARGIN=2, function(x) {
+        rets <- diff(log(x))
+        rets[1] <- 0
+        rets
+    }))
+
+    ## Get the dates:
+    dates <- as.Date(zoo::index(indexedPrice))
+
+    ## Get the weighted price series:
+    weightedPx <- cumprod(1 + indexedPrice %*% weights) * 100
+
+    ## Get the ohlc code:
+    ohlccode <- meta[["ohlccode"]]
+
+    ## If push, then do so:
+    if (push) {
+        pushOhlc("symbol"=rep(ohlccode, NROW(weightedPx)),
+                 "close"=weightedPx,
+                 "date"=dates,
+                 "session"=session)
+    }
+
+    ## Done, return the series:
+    return(list("value"=weightedPx,
+                "ohlccode"=ohlccode,
+                "firstDate"=min(dates),
+                "lastDate"=max(dates),
+                "pushed"=push))
+
+}
+
+
+##' A function to compare NAV's between 2 decaf systems.
+##'
+##' @param accounts The account mapping list.
+##' @param type The type of container. Either 'accounts' or 'portfolios'.
+##' @param ccy The currency to be valued.
 ##' @param date The date of the consolidations.
 ##' @param sSession The source session.
 ##' @param tSession The target session.
