@@ -104,7 +104,7 @@ figiWrapper <- function(data, idType="ID_ISIN", fld="isin", ccy="ccymain", figiA
 ##' @param figiApi The api key of the openFigi account.
 ##' @return Returns a data-frame with openFigi information.
 ##' @export
-figi <- function(data, idType="ID_ISIN", fld="isin", ccy="ccymain", figiApi){
+figi <- function(data, idType="ID_ISIN", fld="isin", ccy="ccymain", figiApi) {
 
     ## If not data, return empty data frame:
     !(NROW(data) == 0) || return(initDF(c("idType", "idValue", "currency", "name")))
@@ -155,7 +155,7 @@ figi <- function(data, idType="ID_ISIN", fld="isin", ccy="ccymain", figiApi){
 figiResultTreater <- function(figiResult, contentName="figictypes"){
 
     ## Get the figi type mapper:
-    figictypes <- getRemapContent(contentName="figictypes")[[1]]
+    figictypes <- ctype_mapping_figi_to_decaf()
 
     ## Get the ctype mapper:
     fctypes <- figictypes[["figictypes"]]
