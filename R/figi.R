@@ -313,19 +313,17 @@ getCurrencyFromFigiExchCode <- function(df){
 ##'
 ##' @param job A data-frame from prepareOpenFigiData.
 ##' @param apiKey The api key of the openFigi account.
+##' @param endpoint Define the endpoint.
 ##' @return Returns a flattened data-frame with results from the openFigi api call.
 ##' @import httr
 ##' @import stats
 ##' @export
-figiCall <- function(job, apiKey){
+figiCall <- function(job, apiKey, endpoint="https://api.openfigi.com/v3/mapping"){
 
     ## If no job, return null:
     if (NROW(job) == 0){
         return(NULL)
     }
-
-    ## Assign the endpoint:
-    endpoint <- "https://api.openfigi.com/v1/mapping"
 
     ## We can only run 100 queries in one job. Let's split to batches:
     str <- strsplit(as.character(NROW(job) / 100), "\\.")[[1]]
