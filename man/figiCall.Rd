@@ -4,12 +4,14 @@
 \alias{figiCall}
 \title{A function to call the openFigi api for a given openFigi job data-frame.}
 \usage{
-figiCall(job, apiKey)
+figiCall(job, apiKey, endpoint = "https://api.openfigi.com/v3/mapping")
 }
 \arguments{
 \item{job}{A data-frame from prepareOpenFigiData.}
 
 \item{apiKey}{The api key of the openFigi account.}
+
+\item{endpoint}{Define the endpoint.}
 }
 \value{
 Returns a flattened data-frame with results from the openFigi api call.
