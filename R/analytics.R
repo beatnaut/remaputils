@@ -326,7 +326,7 @@ getAggregateExposure <- function(holdings, keys) {
         holdings[, x] <- ifelse(is.na(holdings[, x]), "NOTAVAILABLE", holdings[, x])
         holdings[!apply(mgrep(toupper(holdings[, x]), c("N.A", "N/A", "NOTAVAILABLE")), MARGIN=1, function(x) all(x==0)), x] <- "NOTAVAILABLE"
 
-        aggs <- aggregate(numerize(if_else(is.na(holdings[, "Exposure"]),0,holdings[, "Exposure"])), list(holdings[, x]), sum)
+        aggs <- aggregate(numerize(ifelse(is.na(holdings[, "Exposure"]),0,holdings[, "Exposure"])), list(holdings[, x]), sum)
         aggs <- aggs[order(aggs[, 2], decreasing=TRUE), ]
         colnames(aggs) <- c(x, "Exposure")
         aggs
