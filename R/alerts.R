@@ -516,6 +516,88 @@ performanceOutliers <- function(portfolio, start=NULL, factor=8, session) {
 ##' This is the description
 ##'
 ##' @param session The rdecaf session.
+##' @param email_params The parameters for the email dispatch.
+##' @param excl_type The resource type to be excluded.
+##' @param hours The number of hours to look back.
+##' @param greeting The greetings string.
+##' @param deployment The name of the deployment / client.
+##' @param url The url of the deployment.
+##' @param gte Greater than or equal to this time (HH:MM:SS) to run this alert.
+##' @param lte Less than or equal to this time (HH:MM:SS) to run this alert.
+##' @param tz The time-zone for gte and lte.
+##' @return NULL. Email with the alert will be sent.
+##' @export
+alert_latest_trades_clever <- function(session,
+                                       email_params,
+                                       excl_type="CCY",
+                                       hours=24,
+                                       greeting="",
+                                       deployment="",
+                                       url="",
+                                       gte="10:01:00",
+                                       lte="10:19:00",
+                                       tz="UTC") {
+
+    ## Is it alert time?
+    its_alert_time <- itsTime(tz=tz, gte=gte, lte=lte)
+
+    ## If it is not alert time, return NULL:
+    its_alert_time || return(NULL)
+
+    ## Prepare the params for the trades:
+    params <- list("page_size"=-1, "format"="csv", "commitment__gte"=Sys.Date() - 90)
+
+    ##
+    as.numeric(hours) <= 168 || return(stop("Max value for 'hours' parameter is 168"))
+
+    ##:
+    res_ctypes <- c("CCY", "DEPO", "LOAN", "SHRE", "BOND", "SP", "OPT", "CFD", "FUT", "OTHER", "FXFWD", "ZCPN")
+
+    ## Get the trades:
+    trades <- getDBObject("trades", session=session, addParams=list("created__gte"=Sys.Date()-as.numeric(hours)/24,
+                                                                    "resmain__ctype__in"=paste0(res_ctypes[!res_ctypes %in% excl_type], collapse=", ")))
+
+    ## If no trades, mask trade data frame:
+    if (NROW(trades) == 0) {
+        trades <- initDF(colnames(trades), 1)
+    }
+
+    resources <- getDBObject("resources", session=session, addParams=list("id__in"=paste0(unique(trades[, "resmain"]), collapse=", ")))
+
+    ## Construct the trade links:
+    trade_link <- paste0(gsub("api", "", session[["location"]]), "trade/details/", trades[, "id"])
+
+    ## Construct the report email data-frame:
+    result <- data.frame("Trade Link"=trade_link,
+                         "Account"=trades[, "accmain_name"],
+                         "Type"=resources[match(trades[, "resmain"], resources[, "id"]), "ctype"],
+                         "Symbol"=ellipsify(trades[, "resmain_symbol"], 16),
+                         "Name"=ellipsify(resources[match(trades[, "resmain"], resources[, "id"]), "name"], 25),
+                         "Trade Date"=trades[, "commitment"],
+                         "QTY"=beautify(as.character(round(as.numeric(trades[, "qtymain"]), 2)), nsmall=2),
+                         "PX"=beautify(as.character(round(as.numeric(trades[, "pxmain"]), 2)), nsmall=2),
+                         check.names=FALSE,
+                         stringsAsFactors=FALSE)
+
+    ## HTMLize the links:
+    result[, "Trade Link"] <- paste0("<a href='", result[, "Trade Link"], "'>LINK</a>")
+
+    ## Run the email using function above
+    alertEmail(session,
+               data=list("summary"=result),
+               emailParams=email_params,
+               wdw=c(gte,lte),
+               tz=tz)
+
+    return("Email sent!")
+
+}
+
+##' A function to send latest trades alert.
+##'
+##' This is the description
+##'
+##' @param session The rdecaf session.
 ##' @param accounts The data-frame with the rdecaf accounts.
 ##' @param resources The data-frame of the resources in the decaf instance.
 ##' @param emailParams The parameters for the email dispatch.
@@ -584,6 +666,15 @@ alertLatestTrades <- function(session,
 
     ## HTMLize the links:
     result[, "Trade Link"] <- paste0("<a href='", result[, "Trade Link"], "'>LINK</a>")
+
+    ## Run the email using function above
+    alertEmail(session,
+               data=list("summary"=result),
+               emailParams=emailParams,
+               wdw=c(gte,lte),
+               tz=tz
+               )
+
 
     ## Generate the outlier table as HTML and convert to string:
     result <- as.character(emailHTMLTable(result,
@@ -1211,26 +1302,26 @@ alertMissingResourceField <- function (session,
 ##' alertEmail(session=session,data=list("summary"=df %>% dplyr::group_by(parent) %>% dplyr::summarize(v=sum(child)),"details"=df),emailParams=emailParams,wdw=c("23:30:00","23:59:00"),dte="Saturday")
 ##' @export
 alertEmail <- function(session,
-                       data=NULL,                    
+                       data=NULL,
                        emailParams,
                        dtPath="details.csv",
-                       snd=Sys.Date(),               
-                       wdw=c("00:00:00","23:59:00"), 
-                       dte=NULL,                     
+                       snd=Sys.Date(),
+                       wdw=c("00:00:00","23:59:00"),
+                       dte=NULL,
                        tz="Asia/Singapore",
                        noBody=FALSE,
                        ...
                       ) {
 
     ## Is it alert time?
-    itsAlertTime <- itsTime(tz = tz, gte = wdw[1], lte = wdw[length(wdw)]) 
+    itsAlertTime <- itsTime(tz = tz, gte = wdw[1], lte = wdw[length(wdw)])
     itsAlertTime || return(NULL)
-    
+
     itsAlertDate <- weekdays(snd) %in% dte | is.null(dte)
     itsAlertDate || return(NULL)
 
     deployment <- getDepName(session)
-    
+
     addendum   <- ""
     attachment <- NULL
 
@@ -1256,13 +1347,13 @@ alertEmail <- function(session,
                                   )
         addendum <- stringr::str_replace_all(addendum,"&#60;","<")
         addendum <- stringr::str_replace_all(addendum,"&#62;",">")
-              
-        detail <- data[[length(data)]] 
+
+        detail <- data[[length(data)]]
         readr::write_csv(detail, file=dtPath)
         attachment <- dtPath
 
         summEqAttach <- isTRUE(dplyr::all_equal(summary,detail))
-        
+
     }
 
     if(summEqAttach) {
@@ -1291,25 +1382,23 @@ alertEmail <- function(session,
     ## Run sync email report:
     if(is.null(emailParams[["subject"]])) {
 
-    syncUpdateEmail(template=update_email_template,
-                    updateText=.UPDATETEXT,
-                    emailParams=emailParams,
-                    attachments=attachment
-                    )
-    
-    unlink(dtPath)
+        syncUpdateEmail(template=update_email_template,
+                        updateText=.UPDATETEXT,
+                        emailParams=emailParams,
+                        attachments=attachment
+                        )
 
-    return(NULL)
+        unlink(dtPath)
 
+        return(NULL)
     }
 
     syncUpdateEmail(template=update_email_template,
-                updateText=.UPDATETEXT,
-                emailParams=emailParams,
-                subject=emailParams[["subject"]],
-                attachments=attachment
-                )
-    
+                    updateText=.UPDATETEXT,
+                    emailParams=emailParams,
+                    subject=emailParams[["subject"]],
+                    attachments=attachment)
+
     unlink(dtPath)
 
 
@@ -1337,20 +1426,20 @@ alertEmail <- function(session,
 ##' @return Sends email with the alert and returns a message.
 ##' @export
 alertMissingResourceFieldV2 <- function (session,
-                                       resources=NULL,
-                                       emailParams,
-                                       greeting="Dear Team,",
-                                       deployment,
-                                       url,
-                                       gte="00:00:00",
-                                       lte="23:59:59",
-                                       tz = "UTC",
-                                       stockOnly=TRUE,
-                                       emailList=NULL,
-                                       excludeType="CCY",
-                                       invalidVals=NULL,
-                                       fieldName,
-                                       ...) {
+                                         resources=NULL,
+                                         emailParams,
+                                         greeting="Dear Team,",
+                                         deployment,
+                                         url,
+                                         gte="00:00:00",
+                                         lte="23:59:59",
+                                         tz = "UTC",
+                                         stockOnly=TRUE,
+                                         emailList=NULL,
+                                         excludeType="CCY",
+                                         invalidVals=NULL,
+                                         fieldName,
+                                         ...) {
 
     ## Check if  parameters are defined:
     if (!hasArg("session") || !hasArg("resources") || !hasArg("emailParams") || !hasArg("deployment") || !hasArg("url") || !hasArg("fieldName")) {
@@ -1417,11 +1506,11 @@ alertMissingResourceFieldV2 <- function (session,
 
     ## Run the email using function above
     alertEmail(session,
-               data=list("summary"=result),                    
-               emailParams=emailParams,              
-               wdw=c(gte,lte),                     
+               data=list("summary"=result),
+               emailParams=emailParams,
+               wdw=c(gte,lte),
                tz=tz
-              )       
+              )
 
     ## Return with message:
     return("Email Sent!")
@@ -1438,7 +1527,7 @@ alertMissingResourceFieldV2 <- function (session,
 ##' @param send date value of the date representing the as of date. Defaults to present.
 ##' @param date date value of the date in which to send. Defaults to NULL for all.
 ##' @param dataFunc string of the function name to run to return the data. Should be a function that generates a list with two or less elements (summary and details).
-##' @param dataParams list of the parameters to supply the function. 
+##' @param dataParams list of the parameters to supply the function.
 ##' @param ... Any additional arguments.
 ##' @return Sends email with the alert and returns a message.
 ##' @export
@@ -1478,11 +1567,11 @@ alertDecafData <- function(session,
 
     ## Run the email using function above
     alertEmail(session=session,
-               data=data,                    
-               emailParams=emailParams,               
-               wdw=window[1:2],                     
+               data=data,
+               emailParams=emailParams,
+               wdw=window[1:2],
                tz=window[3]
-              )       
+              )
 
     ## Return with message:
     return("Email Sent!")
