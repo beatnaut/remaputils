@@ -519,24 +519,20 @@ performanceOutliers <- function(portfolio, start=NULL, factor=8, session) {
 ##' @param email_params The parameters for the email dispatch.
 ##' @param excl_type The resource type to be excluded.
 ##' @param hours The number of hours to look back.
-##' @param greeting The greetings string.
-##' @param deployment The name of the deployment / client.
-##' @param url The url of the deployment.
 ##' @param gte Greater than or equal to this time (HH:MM:SS) to run this alert.
 ##' @param lte Less than or equal to this time (HH:MM:SS) to run this alert.
 ##' @param tz The time-zone for gte and lte.
+##' @param ... Andy additional parameters.
 ##' @return NULL. Email with the alert will be sent.
 ##' @export
 alert_latest_trades_clever <- function(session,
                                        email_params,
                                        excl_type="CCY",
                                        hours=24,
-                                       greeting="",
-                                       deployment="",
-                                       url="",
                                        gte="10:01:00",
                                        lte="10:19:00",
-                                       tz="UTC") {
+                                       tz="UTC",
+                                       ...) {
 
     ## Is it alert time?
     its_alert_time <- itsTime(tz=tz, gte=gte, lte=lte)

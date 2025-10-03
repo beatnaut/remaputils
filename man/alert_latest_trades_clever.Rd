@@ -9,12 +9,10 @@ alert_latest_trades_clever(
   email_params,
   excl_type = "CCY",
   hours = 24,
-  greeting = "",
-  deployment = "",
-  url = "",
   gte = "10:01:00",
   lte = "10:19:00",
-  tz = "UTC"
+  tz = "UTC",
+  ...
 )
 }
 \arguments{
@@ -26,17 +24,13 @@ alert_latest_trades_clever(
 
 \item{hours}{The number of hours to look back.}
 
-\item{greeting}{The greetings string.}
-
-\item{deployment}{The name of the deployment / client.}
-
-\item{url}{The url of the deployment.}
-
 \item{gte}{Greater than or equal to this time (HH:MM:SS) to run this alert.}
 
 \item{lte}{Less than or equal to this time (HH:MM:SS) to run this alert.}
 
 \item{tz}{The time-zone for gte and lte.}
+
+\item{...}{Andy additional parameters.}
 }
 \value{
 NULL. Email with the alert will be sent.
