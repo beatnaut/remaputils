@@ -2231,11 +2231,26 @@ numerize <- function(str){
 ##' @export
 getDepName <- function(session) {
 
-    v <- stringr::str_split(session$location,"\\.")[[1]]
-    v <- stringr::str_remove(v,"https://")
-    v <- v[1:(which(v=="decafhub")-1)]
-    v <- unique(toupper(as.character(paste(v,collapse=" - "))))
-    
+    ## Remove https://
+    v <- stringr::str_remove(session[["location"]],"https://")
+
+    ## Define key names to be removed:
+    key_names <- c("decaf", "/api")
+
+    ## Split by dot.
+    v <- strsplit(v, "\\.")[[1]]
+
+    ## Filter out key_names:
+    v <- v[sapply(v, function(x) {
+        !any(sapply(key_names, function(z) grepl(z, x)))
+    })]
+
+    ## v <- stringr::str_split(session$location,"\\.")[[1]]
+    ## v <- stringr::str_remove(v,"https://")
+    ## v <- v[1:(which(v=="decafhub")-1)]
+
+    v <- unique(toupper(as.character(paste(v,collapse="-"))))
+
     return(v)
 
 }
@@ -2252,7 +2267,7 @@ getDepName <- function(session) {
 conditionFn <- function(df,expr,group=NULL) {
 
   if(!is.null(group)) {
-  
+
   df <- df %>%
     dplyr::group_by(dplyr::across(tidyselect::all_of(group)))
 
@@ -2312,4 +2327,3 @@ cleanDfReturn <- function(df,col="id") {
   return(dat)
 
 }
-
