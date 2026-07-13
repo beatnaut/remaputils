@@ -1287,9 +1287,11 @@ decafSyncOHLC <- function (sSession,
         payload <- toJSON(ohlcObsN, auto_unbox=TRUE, na=c("null"), digits=10)
 
         ##
-        result <- httr::POST(paste0(tSession[["location"]],
-                                    "/ohlcobservations/updatebulk/"), authenticate(tSession[["username"]],
-                                                                                   tSession[["password"]]), body = payload, add_headers(.headers = c(`Content-Type` = "application/json")))
+        result <- httr::POST(paste0(tSession[["location"]], "/ohlcobservations/updatebulk/"),
+                             config=httr::add_headers(
+                                "Content-Type" = "application/json",
+                                "Authorization" = paste0("Key ", tSession[["apikey"]], ":", tSession[["apisecret"]])),
+                             body=payload)
         start <- start + chunk + 1
 
     }
@@ -2038,9 +2040,10 @@ pushOhlc <- function(symbol, close, date, session, source=NA) {
 
         ## Push:
         result <- httr::POST(paste0(session[["location"]], "/ohlcobservations/updatebulk/"),
-                             httr::authenticate(session[["username"]], session[["password"]]),
-                             body=payload,
-                             httr::add_headers(.headers = c("Content-Type"="application/json")))
+                             config=httr::add_headers(
+                                "Content-Type" = "application/json",
+                                "Authorization" = paste0("Key ", session[["apikey"]], ":", session[["apisecret"]])),
+                             body=payload)
     }
 
 }
