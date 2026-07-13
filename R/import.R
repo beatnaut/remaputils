@@ -2038,9 +2038,10 @@ pushOhlc <- function(symbol, close, date, session, source=NA) {
 
         ## Push:
         result <- httr::POST(paste0(session[["location"]], "/ohlcobservations/updatebulk/"),
-                             httr::authenticate(session[["username"]], session[["password"]]),
-                             body=payload,
-                             httr::add_headers(.headers = c("Content-Type"="application/json")))
+                             config=httr::add_headers(
+                                "Content-Type" = "application/json",
+                                "Authorization" = paste0("Key ", session[["apikey"]], ":", session[["apisecret"]])),
+                             body=payload)
     }
 
 }
