@@ -663,9 +663,10 @@ syncOHLC <- function(sourceSession, targetSession, resources, lte=NULL, lookBack
 
         ## Push:
         result <- httr::POST(paste0(targetSession[["location"]], "/ohlcobservations/updatebulk/"),
-                             authenticate(targetSession[["username"]], targetSession[["password"]]),
-                             body=payload,
-                             add_headers(.headers = c("Content-Type"="application/json")))
+                             config=httr::add_headers(
+                                "Content-Type" = "application/json",
+                                "Authorization" = paste0("Key ", targetSession[["apikey"]], ":", targetSession[["apisecret"]])),
+                             body=payload)
 
             ## Update the start index:
         start <- start + chunk + 1
