@@ -529,8 +529,8 @@ alert_latest_trades_clever <- function(session,
                                        email_params,
                                        excl_type="CCY",
                                        hours=24,
-                                       gte="10:01:00",
-                                       lte="10:19:00",
+                                       gte="00:00:00",
+                                       lte="23:59:59",
                                        tz="UTC",
                                        ...) {
 
