@@ -1,3 +1,143 @@
+##' A function to compute the return the portfolio weights over a specific periodicity.
+##'
+##' @param p The portfolio id.
+##' @param session The session of the instance.
+##' @param start The start date. Default is 360 days ago from today.
+##' @param end The end date. Default is today.
+##' @param period The memnonic for dateOfPeriod function. Any of D, W, M, Q, Y.
+##' @return A list with the input data and the results, where results are the weights over the periods
+##' @export
+##'
+getPortfolioWeights <- function(p, session, start=Sys.Date()-360, end=Sys.Date(), period="W") {
+
+    ## If start is null, set it to the inception of the portfolio:
+    if (is.null(start)) {
+        start <- min(getDBObject("accounts", session, addParams=list("portfolio"=p))[, "inception"])
+    }
+
+    ## Get the portfolio rccy:
+    rccy <- getDBObject("portfolios", session, addParams=list("id"=p))$rccy
+
+    ## Get the resources for portfolio:
+    resources <- try(getResourcesByStock(getStocks(p, session, date=end, c="portfolio"), session), silent=TRUE)
+
+    ## Exit with NULL if no stocks:
+    class(resources) != "try-error" || return(list("portfolio"=p,
+                                                   "start"=start,
+                                                   "end"=end,
+                                                   "period"=period,
+                                                   "result"=NULL))
+
+    ## Get the asset class:
+    asstClass <- getDBObject("assetclasses", session)
+
+    ## Get the asset class names and heads:
+    resources[, "aClass_name"] <- asstClass[match(resources[, "assetclass"], asstClass[, "id"]), "name"]
+    resources[, "aClass_head"] <- asstClass[match(resources[, "assetclass"], asstClass[, "id"]), "path.0"]
+
+    ## Get the relevant dates:
+    cDates <- as.character(periodDates(period, yearsOfHistory=as.numeric(end-start)/365, endOfWeek="Friday", date=end))
+
+    ## Initialise retval:
+    results <- list()
+
+    ## Iteratve over dates and get the weights:
+    for (cDt in cDates) {
+
+        ## Get the holdings;
+        holdings <- getConsolidationHoldings(session, "portfolios", p, rccy, cDt, charLimit=40, resources)
+
+        ## Print:
+        print(sprintf("Current Date: %s (until %s)", cDt, end))
+        print(noquote("------------------------------------------"))
+
+        ## Compute the net exposure:
+        holdings[, "Net Exposure"] <- abs(holdings[, "Exposure"]) * sign(holdings[, "QTY"])
+
+        ## Prepare the results:
+        results[[cDt]]<- data.frame("symbol"=holdings[, "Symbol"],
+                                    "weight"=round(holdings[, "Net Exposure"] / sum(holdings[, "Net Exposure"]), 4),
+                                    "qtymain"=holdings[, "QTY"],
+                                    "pxmain"=holdings[, "PX Last"],
+                                    "resmain"=holdings[, "ID"],
+                                    "ccymain"=holdings[, "CCY"],
+                                    "ctype"=resources[match(holdings[, "ID"], resources[, "id"]), "ctype"],
+                                    "sector"=resources[match(holdings[, "ID"], resources[, "id"]), "sector"],
+                                    "assetclass"=resources[match(holdings[, "ID"], resources[, "id"]), "assetclass"],
+                                    "assetclass_name"=resources[match(holdings[, "ID"], resources[, "id"]), "aClass_name"],
+                                    "assetclass_head"=resources[match(holdings[, "ID"], resources[, "id"]), "aClass_head"],
+                                    "ohlccode"=resources[match(holdings[, "ID"], resources[, "id"]), "ohlccode"],
+                                    "quantity"=holdings[, "PXFactor"])
+
+        ## Append the final price series symbol:
+        results[[cDt]][, "px_series_symbol"] <- ifelse(isNAorEmpty(results[[cDt]][, "ohlccode"]),
+                                                       results[[cDt]][, "symbol"],
+                                                       results[[cDt]][, "ohlccode"])
+    }
+
+    ## Done, return:
+    return(list("portfolio"=p,
+                "start"=start,
+                "end"=end,
+                "period"=period,
+                "result"=results))
+
+}
+
+
+##' A function to derive the dividend or coupon per unit from decaf's trades endpoint.
+##'
+##' @param session The session of the instance.
+##' @param ctype The trade ctype. Either 81 or 101. Default is 81.
+##' @param commitment__gte Since which date should the corporate actions be consdered? When NULL for all history. Default is dateOfPeriod(Y-0).
+##' @return A data frame with the corporate action per unit value, resource symbol and id and the corresponding date.
+##' @export
+##'
+getCorporateActionPerUnit <- function(session, ctype=c("81", "101")[1], commitment__gte=dateOfPeriod("Y-0")) {
+
+    ## Get the ctype based trades from system:
+    caTrades <- getDBObject("trades", session=session, addParams=list("ctype"=ctype, "commitment__gte"=commitment__gte))
+
+    ## Create a composite key, resource and commitment:
+    caTrades[, "key"] <- paste0(caTrades[, "resundr"], caTrades[, "commitment"])
+
+    ## Extract to list by key:
+    trdsByKey <- extractToList(caTrades, "key")
+
+    ## Print something ...
+    print("running ...")
+
+    ## Iterate over trades for each unique resource+commitment:
+    retval <- do.call(rbind, lapply(trdsByKey, function(x) {
+
+        ## Get the stocks for respective account(s) which have had the ctype trade:
+        stocks <- getStocks(data.frame("id"=x[, "accmain"]), session, zero = 1, date=x[1, "commitment"]-1, c = "account")
+
+        ## Get the stock(s) for the specific resource:
+        stocks <- stocks[stocks[, "artifact"] == x[1, "resundr"], ]
+
+        ## If not stocks, exit with NULL:
+        NROW(stocks) > 0 || return(NULL)
+
+        ## Get the ctypes traded qty of the first account in the stocks:
+        cash <- x[match(stocks[1, "account"], x[, "accmain"]), "qtymain"]
+
+        ## Construct the data frame:
+        data.frame("value"=numerize(cash) / numerize(stocks[1, "quantity"]),
+                   "symbol"=x[1, "resundr_symbol"],
+                   "resmain"=x[1, "resundr"],
+                   "date"=x[1, "commitment"])
+    }))
+
+    ## Get rid of row names:
+    rownames(retval) <- NULL
+
+    ## Done, return:
+    return(retval)
+
+}
+
+
 ##' A function to compare NAV's between 2 decaf systems.
 ##'
 ##' @param accounts The account mapping list.
